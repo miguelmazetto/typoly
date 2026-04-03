@@ -372,6 +372,7 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
             const isExported = this.isExported(node);
             const returnType = node.type ? this.typeToString(node.type) : "";
             
+            this.write("func ");
             if (isExported) {
                 this.write(funcName);
             } else {
