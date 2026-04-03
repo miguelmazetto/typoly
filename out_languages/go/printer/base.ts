@@ -1,6 +1,7 @@
 import { CPrinter } from "base_printer";
 import * as ts from 'typescript';
 import type { SourceFile, Identifier, Node, TypeNode } from "typescript";
+import { loadFunctionOverrides, resolveFunctionOverride } from '../config/resolver';
 
 export class GoPrinterBase extends CPrinter {
     typeChecker: ts.TypeChecker | undefined;
@@ -8,7 +9,10 @@ export class GoPrinterBase extends CPrinter {
     currentModuleName: string = "";
     currentPackagePath: string = "";
     importedPackages: Set<string> = new Set();
+    namespaceImports: Map<string, string> = new Map();
+    namedImports: Map<string, string> = new Map();
     usedHelpers: Set<string> = new Set();
+    functionOverrides = loadFunctionOverrides();
 
     constructor(printerOptions: any = {}, handlers: any = {}, extra: any) {
         super(printerOptions, handlers, extra);
@@ -43,7 +47,6 @@ export class GoPrinterBase extends CPrinter {
         name = name.replace(/^(\.\.\/)/, "../");
         name = name.replace(/\\/g, "/");
         name = name.replace(/\.tsx?$/, "");
-        // Convert to Go-style import path
         name = name.replace(/\./g, "_");
         name = name.replace(/-/g, "_");
         return name;
@@ -248,5 +251,87 @@ export class GoPrinterBase extends CPrinter {
             return (node as Identifier).escapedText.toString();
         }
         return super.getTextOfNode(node as any);
+    }
+
+    protected getImportedModuleName(expr: ts.Expression): string | undefined {
+        if (!ts.isIdentifier(expr)) return undefined;
+        return this.namespaceImports.get(expr.text);
+    }
+
+    protected resolveFunctionOverride(
+        fullFunctionName: string,
+        args: ts.NodeArray<ts.Expression>
+    ): { cppFunction: string; returnType?: string } | null {
+        if (!this.functionOverrides.functions[fullFunctionName]) return null;
+        
+        const argValues: any[] = [];
+        for (const arg of args) {
+            argValues.push(this.extractArgumentValue(arg));
+        }
+        
+        const config = this.functionOverrides.functions[fullFunctionName];
+        let optionValue: string | undefined;
+        let dataType: string | undefined;
+        
+        if (config.optionParameter !== undefined && config.optionName) {
+            optionValue = this.extractOptionValueFromArgs(args, config.optionParameter, config.optionName);
+        }
+        
+        if (args.length > 0) {
+            dataType = this.getArgumentDataType(args[0]);
+        }
+        
+        return resolveFunctionOverride(fullFunctionName, argValues, optionValue, dataType);
+    }
+    
+    private extractArgumentValue(arg: ts.Expression): any {
+        if (ts.isStringLiteral(arg)) {
+            return arg.text;
+        }
+        if (ts.isNumericLiteral(arg)) {
+            return parseFloat(arg.text);
+        }
+        if (arg.kind === ts.SyntaxKind.TrueKeyword) return true;
+        if (arg.kind === ts.SyntaxKind.FalseKeyword) return false;
+        if (arg.kind === ts.SyntaxKind.NullKeyword) return null;
+        if (ts.isObjectLiteralExpression(arg)) {
+            const obj: any = {};
+            for (const prop of arg.properties) {
+                if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name)) {
+                    obj[prop.name.text] = this.extractArgumentValue(prop.initializer);
+                }
+            }
+            return obj;
+        }
+        return undefined;
+    }
+    
+    private extractOptionValueFromArgs(
+        args: ts.NodeArray<ts.Expression>,
+        optionParamIndex: number,
+        optionName: string
+    ): string | undefined {
+        if (optionParamIndex >= args.length) return undefined;
+        
+        const optionsArg = args[optionParamIndex];
+        if (!ts.isObjectLiteralExpression(optionsArg)) return undefined;
+        
+        for (const prop of optionsArg.properties) {
+            if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name)) {
+                if (prop.name.text === optionName && ts.isStringLiteral(prop.initializer)) {
+                    return prop.initializer.text;
+                }
+            }
+        }
+        return undefined;
+    }
+    
+    private getArgumentDataType(arg: ts.Expression): string | undefined {
+        if (ts.isStringLiteral(arg)) return 'string';
+        if (ts.isNumericLiteral(arg)) return 'number';
+        if (arg.kind === ts.SyntaxKind.TrueKeyword || arg.kind === ts.SyntaxKind.FalseKeyword) return 'boolean';
+        if (ts.isArrayLiteralExpression(arg)) return 'array';
+        if (ts.isObjectLiteralExpression(arg)) return 'object';
+        return undefined;
     }
 }

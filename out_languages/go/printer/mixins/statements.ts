@@ -13,7 +13,6 @@ import type {
     SwitchStatement,
     BreakStatement,
     ContinueStatement,
-    ExpressionStatement,
 } from "typescript";
 
 export function StatementsMixin<TBase extends new (...args: any[]) => any>(Base: TBase) {
@@ -24,10 +23,6 @@ export function StatementsMixin<TBase extends new (...args: any[]) => any>(Base:
             this.increaseIndent();
             for (const stmt of node.statements) {
                 this.emit(stmt);
-                // Add semicolon after expression statements
-                if (stmt.kind === ts.SyntaxKind.ExpressionStatement) {
-                    this.writePunctuation(";");
-                }
                 this.writeLine();
             }
             this.decreaseIndent();
@@ -37,7 +32,9 @@ export function StatementsMixin<TBase extends new (...args: any[]) => any>(Base:
         emitIfStatement(node: IfStatement): void {
             this.writeKeyword("if");
             this.writeSpace();
+            this.writePunctuation("(");
             this.emitExpression(node.expression);
+            this.writePunctuation(")");
             this.writeSpace();
             this.emitEmbeddedStatement(node, node.thenStatement);
             if (node.elseStatement) {
@@ -51,7 +48,9 @@ export function StatementsMixin<TBase extends new (...args: any[]) => any>(Base:
         emitWhileStatement(node: WhileStatement): void {
             this.writeKeyword("for");
             this.writeSpace();
+            this.writePunctuation("(");
             this.emitExpression(node.expression);
+            this.writePunctuation(")");
             this.writeSpace();
             this.emitEmbeddedStatement(node, node.statement);
         }
@@ -59,27 +58,12 @@ export function StatementsMixin<TBase extends new (...args: any[]) => any>(Base:
         emitDoStatement(node: DoStatement): void {
             // Go doesn't have do-while, use for with break
             this.emitEmbeddedStatement(node, node.statement);
-            this.writeLine();
-            this.writeKeyword("for");
-            this.writeSpace();
-            this.writePunctuation("{");
-            this.writeLine();
-            this.increaseIndent();
-            this.writeKeyword("if");
-            this.writeSpace();
-            this.writeOperator("!");
-            this.emitExpression(node.expression);
-            this.writeSpace();
-            this.writePunctuation("{ break }");
-            this.writeLine();
-            this.emitEmbeddedStatement(node, node.statement);
-            this.decreaseIndent();
-            this.writePunctuation("}");
         }
 
         emitForStatement(node: ForStatement): void {
             this.writeKeyword("for");
             this.writeSpace();
+            this.writePunctuation("(");
             
             // Init
             if (node.initializer) {
@@ -104,6 +88,7 @@ export function StatementsMixin<TBase extends new (...args: any[]) => any>(Base:
                 this.emitExpression(node.incrementor);
             }
             
+            this.writePunctuation(")");
             this.writeSpace();
             this.emitEmbeddedStatement(node, node.statement);
         }
@@ -111,11 +96,11 @@ export function StatementsMixin<TBase extends new (...args: any[]) => any>(Base:
         emitForInStatement(node: ForInStatement): void {
             this.writeKeyword("for");
             this.writeSpace();
+            this.writePunctuation("_, ");
             
             if (ts.isVariableDeclarationList(node.initializer)) {
                 const decl = node.initializer.declarations[0];
-                const varName = this.getTextOfNode(decl.name);
-                this.write(varName);
+                this.emit(decl.name);
             } else {
                 this.emit(node.initializer);
             }
@@ -130,14 +115,11 @@ export function StatementsMixin<TBase extends new (...args: any[]) => any>(Base:
         emitForOfStatement(node: ForOfStatement): void {
             this.writeKeyword("for");
             this.writeSpace();
+            this.writePunctuation("_, ");
             
             if (ts.isVariableDeclarationList(node.initializer)) {
                 const decl = node.initializer.declarations[0];
-                const varName = this.getTextOfNode(decl.name);
-                this.write("_");
-                this.writePunctuation(",");
-                this.writeSpace();
-                this.write(varName);
+                this.emit(decl.name);
             } else {
                 this.emit(node.initializer);
             }
@@ -167,40 +149,7 @@ export function StatementsMixin<TBase extends new (...args: any[]) => any>(Base:
 
         emitTryStatement(node: TryStatement): void {
             // Go uses defer/recover for panic recovery
-            this.writePunctuation("{");
-            this.writeLine();
-            this.increaseIndent();
-            
-            // Defer recovery if there's a catch
-            if (node.catchClause) {
-                this.write("defer func() {");
-                this.writeLine();
-                this.increaseIndent();
-                this.write("if r := recover(); r != nil {");
-                this.writeLine();
-                this.increaseIndent();
-                
-                if (node.catchClause.variableDeclaration) {
-                    const paramName = this.getTextOfNode(node.catchClause.variableDeclaration.name);
-                    this.write(paramName);
-                    this.write(" := r");
-                    this.writeLine();
-                }
-                
-                this.emit(node.catchClause.block);
-                this.decreaseIndent();
-                this.writePunctuation("}");
-                this.writeLine();
-                this.decreaseIndent();
-                this.writePunctuation("}()");
-                this.writeLine();
-            }
-            
-            // Emit try block
             this.emit(node.tryBlock);
-            
-            this.decreaseIndent();
-            this.writePunctuation("}");
         }
 
         emitSwitchStatement(node: SwitchStatement): void {
@@ -217,10 +166,6 @@ export function StatementsMixin<TBase extends new (...args: any[]) => any>(Base:
 
         emitContinueStatement(node: ContinueStatement): void {
             this.writeKeyword("continue");
-        }
-
-        emitExpressionStatement(node: ExpressionStatement): void {
-            this.emitExpression(node.expression);
         }
     }
     

@@ -16,6 +16,23 @@ import type {
     FunctionExpression,
 } from "typescript";
 
+// Node.js core module mapping to Go stdlib packages
+const NODE_CORE_MODULES: Record<string, string> = {
+    'fs': 'fs',
+    'path': 'path',
+    'os': 'os',
+    'regexp': 'regexp',
+    'crypto': 'crypto',
+    'encoding': 'encoding',
+    'time': 'time',
+    'fmt': 'fmt',
+    'strings': 'strings',
+    'strconv': 'strconv',
+    'math': 'math',
+    'json': 'encoding/json',
+    'net/http': 'net/http',
+};
+
 export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base: TBase) {
     class ExpressionsMixin extends Base {
         emitBinaryExpression(node: BinaryExpression): void {
@@ -108,7 +125,6 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
 
         private emitNullishCoalescing(node: BinaryExpression): void {
             // In Go, we can't directly implement nullish coalescing
-            // Use a helper or inline check
             this.write("func() interface{} { if ");
             this.emitExpression(node.left);
             this.write(" != nil { return ");
@@ -131,6 +147,15 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
                 return;
             }
 
+            // Check for imported module access
+            const importedModule = this.getImportedModuleName(node.expression);
+            if (importedModule) {
+                this.write(importedModule);
+                this.writePunctuation(".");
+                this.write(this.toPascalCase(this.getTextOfNode(node.name)));
+                return;
+            }
+
             this.emitExpression(node.expression);
             this.writePunctuation(".");
             this.write(this.toPascalCase(this.getTextOfNode(node.name)));
@@ -139,17 +164,37 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
         emitCallExpression(node: CallExpression): void {
             if (ts.isPropertyAccessExpression(node.expression)) {
                 const propExpr = node.expression;
+                const importedModule = this.getImportedModuleName(propExpr.expression);
+                const methodName = ts.isIdentifier(propExpr.name) ? propExpr.name.text : '';
+                
+                if (importedModule) {
+                    // Check for function overrides
+                    const fullFunctionName = `${importedModule}.${methodName}`;
+                    const override = this.resolveFunctionOverride(fullFunctionName, node.arguments);
+                    
+                    if (override) {
+                        this.write(importedModule);
+                        this.writePunctuation(".");
+                        this.write(override.cppFunction);
+                        this.emitArguments(node.arguments);
+                        return;
+                    }
+                    
+                    this.write(importedModule);
+                    this.writePunctuation(".");
+                    this.write(this.toPascalCase(methodName));
+                    this.emitArguments(node.arguments);
+                    return;
+                }
                 
                 // Handle console.log
                 if (ts.isIdentifier(propExpr.expression) && propExpr.expression.text === "console") {
-                    const methodName = this.getTextOfNode(propExpr.name);
                     this.emitConsoleCall(methodName, node.arguments);
                     return;
                 }
                 
                 // Handle Math methods
                 if (ts.isIdentifier(propExpr.expression) && propExpr.expression.text === "Math") {
-                    const methodName = this.getTextOfNode(propExpr.name);
                     this.emitMathCall(methodName, node.arguments);
                     return;
                 }
@@ -163,6 +208,20 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
                 // Handle array methods
                 this.emitMethodCall(propExpr, node.arguments);
                 return;
+            }
+
+            if (ts.isIdentifier(node.expression)) {
+                const funcName = node.expression.text;
+                
+                // Check if this function was imported via named import
+                if (this.namedImports && this.namedImports.has(funcName)) {
+                    const moduleNs = this.namedImports.get(funcName) || "";
+                    this.write(moduleNs);
+                    this.writePunctuation(".");
+                    this.write(this.toPascalCase(funcName));
+                    this.emitArguments(node.arguments);
+                    return;
+                }
             }
 
             if (node.expression.kind === ts.SyntaxKind.SuperKeyword) {
@@ -281,7 +340,6 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
                 }
                 this.writePunctuation(")");
             } else {
-                // Fallback
                 this.writeStringLiteral(str);
                 this.writePunctuation(".");
                 this.write(method);
@@ -317,6 +375,7 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
 
         emitNewExpression(node: NewExpression): void {
             const typeName = this.toPascalCase(this.getTextOfNode(node.expression));
+            this.write("&");
             this.write(typeName);
             this.writePunctuation("{");
             for (let i = 0; i < (node.arguments?.length || 0); i++) {
