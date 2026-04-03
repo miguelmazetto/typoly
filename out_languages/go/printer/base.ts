@@ -49,7 +49,7 @@ export class GoPrinterBase extends CPrinter {
         name = name.replace(/\.tsx?$/, "");
         name = name.replace(/\./g, "_");
         name = name.replace(/-/g, "_");
-        return name;
+        return "test_package/" + name;
     }
 
     // Type mapping

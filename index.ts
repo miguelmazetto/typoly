@@ -456,12 +456,21 @@ console.log('Source files:', program.getSourceFiles()
                 const cwdNormalized = cwd.replace(/\\/g, '/');
                 const outDirNormalized = outLangDir.replace(/\\/g, '/');
                 
-                // Debug: log the raw path
-                console.log('DEBUG raw f:', f);
-                console.log('DEBUG outDirNormalized:', outDirNormalized);
-                
                 // The path from TypeScript already includes outDir, so just use it directly
-                const outPath = f;
+                let outPath = f;
+                
+                // For Go, restructure output so each file is in its own package directory
+                if (args.lang === 'go') {
+                    // Convert path/to/file.go to path/to/file/file.go
+                    const lastSlash = outPath.lastIndexOf('/');
+                    if (lastSlash > 0) {
+                        const dir = outPath.substring(0, lastSlash);
+                        const base = outPath.substring(lastSlash + 1);
+                        const pkgName = base.replace(/\.(go|ts)$/, '');
+                        outPath = `${dir}/${pkgName}/${base}`;
+                    }
+                }
+                
                 const lastSlash = outPath.lastIndexOf('/');
                 const outDirPath = lastSlash > 0 ? outPath.substring(0, lastSlash) : '';
                 if (outDirPath && !fs.existsSync(outDirPath)) {
@@ -552,6 +561,35 @@ int main(int argc, char* argv[]) {
     
     // main() is now appended to the entry file by the printer, no need for separate main.cpp
 } else if (args.lang === 'go') {
+    // Copy Go stdlib files to output directory
+    const stdlibDir = join(__dirname, 'out_languages', 'go', 'stdlib');
+    const stdlibOutDir = join(outLangDir, 'stdlib');
+    if (!fs.existsSync(stdlibOutDir)) {
+        fs.mkdirSync(stdlibOutDir, { recursive: true });
+    }
+    
+    // Copy all Go stdlib files recursively
+    function copyDirRecursive(src: string, dest: string) {
+        if (!fs.existsSync(dest)) {
+            fs.mkdirSync(dest, { recursive: true });
+        }
+        const entries = fs.readdirSync(src, { withFileTypes: true });
+        for (const entry of entries) {
+            const srcPath = join(src, entry.name);
+            const destPath = join(dest, entry.name);
+            if (entry.isDirectory()) {
+                copyDirRecursive(srcPath, destPath);
+            } else {
+                fs.copyFileSync(srcPath, destPath);
+            }
+        }
+    }
+    
+    if (fs.existsSync(stdlibDir)) {
+        copyDirRecursive(stdlibDir, stdlibOutDir);
+        console.log('copied Go stdlib');
+    }
+    
     // Generate go.mod
     const goModContent = generateGoMod(packageName, pkg);
     const goModPath = join(outLangDir, 'go.mod');

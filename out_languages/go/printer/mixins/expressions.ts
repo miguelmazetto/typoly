@@ -16,27 +16,67 @@ import type {
     FunctionExpression,
 } from "typescript";
 
-// Node.js core module mapping to Go stdlib packages
-const NODE_CORE_MODULES: Record<string, string> = {
-    'fs': 'fs',
-    'path': 'path',
-    'os': 'os',
-    'regexp': 'regexp',
-    'crypto': 'crypto',
-    'encoding': 'encoding',
-    'time': 'time',
-    'fmt': 'fmt',
-    'strings': 'strings',
-    'strconv': 'strconv',
-    'math': 'math',
-    'json': 'encoding/json',
-    'net/http': 'net/http',
-};
-
 export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base: TBase) {
     class ExpressionsMixin extends Base {
         emitBinaryExpression(node: BinaryExpression): void {
             const operator = node.operatorToken.kind;
+            
+            // Handle typeof comparisons: typeof x === "string"
+            if ((operator === ts.SyntaxKind.EqualsEqualsEqualsToken || 
+                 operator === ts.SyntaxKind.EqualsEqualsToken) &&
+                ts.isTypeOfExpression(node.left) && 
+                ts.isStringLiteral(node.right)) {
+                const typeofExpr = node.left as ts.TypeOfExpression;
+                const typeStr = node.right.text;
+                if (this.typeChecker) {
+                    try {
+                        const type = this.typeChecker.getTypeAtLocation(typeofExpr.expression);
+                        if (type) {
+                            const tsTypeStr = this.typeChecker.typeToString(type);
+                            if (tsTypeStr === typeStr) {
+                                this.write("true");
+                                return;
+                            } else {
+                                this.write("false");
+                                return;
+                            }
+                        }
+                    } catch {
+                        // Fall through
+                    }
+                }
+                this.write("true");
+                return;
+            }
+            
+            // Handle !== comparisons with typeof
+            if ((operator === ts.SyntaxKind.ExclamationEqualsEqualsToken || 
+                 operator === ts.SyntaxKind.ExclamationEqualsToken) &&
+                ts.isTypeOfExpression(node.left) && 
+                ts.isStringLiteral(node.right)) {
+                const typeofExpr = node.left as ts.TypeOfExpression;
+                const typeStr = node.right.text;
+                if (this.typeChecker) {
+                    try {
+                        const type = this.typeChecker.getTypeAtLocation(typeofExpr.expression);
+                        if (type) {
+                            const tsTypeStr = this.typeChecker.typeToString(type);
+                            if (tsTypeStr !== typeStr) {
+                                this.write("true");
+                                return;
+                            } else {
+                                this.write("false");
+                                return;
+                            }
+                        }
+                    } catch {
+                        // Fall through
+                    }
+                }
+                this.write("true");
+                return;
+            }
+            
             let goOperator: string;
             
             switch (operator) {
@@ -124,7 +164,6 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
         }
 
         private emitNullishCoalescing(node: BinaryExpression): void {
-            // In Go, we can't directly implement nullish coalescing
             this.write("func() interface{} { if ");
             this.emitExpression(node.left);
             this.write(" != nil { return ");
@@ -147,13 +186,36 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
                 return;
             }
 
+            // Check for array/slice .length property access
+            const propName = ts.isIdentifier(node.name) ? node.name.text : '';
+            if (propName === 'length' || propName === 'Length') {
+                this.write("len(");
+                this.emitExpression(node.expression);
+                this.writePunctuation(")");
+                return;
+            }
+
             // Check for imported module access
             const importedModule = this.getImportedModuleName(node.expression);
             if (importedModule) {
-                this.write(importedModule);
+                const pathParts = importedModule.split("/");
+                const pkgName = pathParts[pathParts.length - 1];
+                this.write(pkgName);
                 this.writePunctuation(".");
                 this.write(this.toPascalCase(this.getTextOfNode(node.name)));
                 return;
+            }
+
+            // Check for console.log, Math.*, etc.
+            if (ts.isIdentifier(node.expression)) {
+                const objName = node.expression.text;
+                const globalObjects = ["console", "Math", "JSON", "Date", "RegExp", "process", "path", "fs", "os"];
+                if (globalObjects.includes(objName)) {
+                    this.write(objName);
+                    this.writePunctuation(".");
+                    this.write(this.toPascalCase(this.getTextOfNode(node.name)));
+                    return;
+                }
             }
 
             this.emitExpression(node.expression);
@@ -168,60 +230,48 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
                 const methodName = ts.isIdentifier(propExpr.name) ? propExpr.name.text : '';
                 
                 if (importedModule) {
-                    // Check for function overrides
+                    const pathParts = importedModule.split("/");
+                    const pkgName = pathParts[pathParts.length - 1];
+                    
                     const fullFunctionName = `${importedModule}.${methodName}`;
                     const override = this.resolveFunctionOverride(fullFunctionName, node.arguments);
                     
                     if (override) {
-                        this.write(importedModule);
+                        this.write(pkgName);
                         this.writePunctuation(".");
                         this.write(override.cppFunction);
+                        this.writePunctuation("(");
                         this.emitArguments(node.arguments);
+                        this.writePunctuation(")");
                         return;
                     }
                     
-                    this.write(importedModule);
+                    this.write(pkgName);
                     this.writePunctuation(".");
                     this.write(this.toPascalCase(methodName));
+                    this.writePunctuation("(");
                     this.emitArguments(node.arguments);
+                    this.writePunctuation(")");
                     return;
                 }
                 
-                // Handle console.log
                 if (ts.isIdentifier(propExpr.expression) && propExpr.expression.text === "console") {
                     this.emitConsoleCall(methodName, node.arguments);
                     return;
                 }
                 
-                // Handle Math methods
                 if (ts.isIdentifier(propExpr.expression) && propExpr.expression.text === "Math") {
                     this.emitMathCall(methodName, node.arguments);
                     return;
                 }
                 
-                // Handle string methods
                 if (ts.isStringLiteral(propExpr.expression)) {
                     this.emitStringMethodCall(propExpr, node.arguments);
                     return;
                 }
                 
-                // Handle array methods
                 this.emitMethodCall(propExpr, node.arguments);
                 return;
-            }
-
-            if (ts.isIdentifier(node.expression)) {
-                const funcName = node.expression.text;
-                
-                // Check if this function was imported via named import
-                if (this.namedImports && this.namedImports.has(funcName)) {
-                    const moduleNs = this.namedImports.get(funcName) || "";
-                    this.write(moduleNs);
-                    this.writePunctuation(".");
-                    this.write(this.toPascalCase(funcName));
-                    this.emitArguments(node.arguments);
-                    return;
-                }
             }
 
             if (node.expression.kind === ts.SyntaxKind.SuperKeyword) {
@@ -229,7 +279,6 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
                 return;
             }
 
-            // Regular function call
             this.emitExpression(node.expression);
             this.writePunctuation("(");
             this.emitArguments(node.arguments);
@@ -375,6 +424,8 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
 
         emitNewExpression(node: NewExpression): void {
             const typeName = this.toPascalCase(this.getTextOfNode(node.expression));
+            // In Go, new Type(args) is equivalent to &Type{args...}
+            // But for struct construction, we should use &Type{} with field names
             this.write("&");
             this.write(typeName);
             this.writePunctuation("{");
@@ -387,9 +438,11 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
             }
             this.writePunctuation("}");
         }
+            }
+            this.writePunctuation("}");
+        }
 
         emitAwaitExpression(node: AwaitExpression): void {
-            // Go doesn't have await, just emit the expression
             this.emitExpression(node.expression);
         }
 
@@ -402,7 +455,6 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
         }
 
         emitConditionalExpression(node: ConditionalExpression): void {
-            // Go doesn't have ternary, use if-else expression pattern
             this.write("func() interface{} { if ");
             this.emitExpression(node.condition);
             this.write(" { return ");
@@ -435,7 +487,6 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
                     this.writeOperator("-");
                     break;
                 case ts.SyntaxKind.PlusToken:
-                    // No-op in Go
                     break;
                 case ts.SyntaxKind.TildeToken:
                     this.writeOperator("^");
@@ -505,7 +556,6 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
                 return;
             }
             
-            // Try to infer element type
             let elemType = "interface{}";
             const firstElem = node.elements[0];
             if (ts.isNumericLiteral(firstElem)) {

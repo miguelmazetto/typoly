@@ -48,49 +48,61 @@ export function StatementsMixin<TBase extends new (...args: any[]) => any>(Base:
         emitWhileStatement(node: WhileStatement): void {
             this.writeKeyword("for");
             this.writeSpace();
-            this.writePunctuation("(");
             this.emitExpression(node.expression);
-            this.writePunctuation(")");
             this.writeSpace();
             this.emitEmbeddedStatement(node, node.statement);
         }
 
         emitDoStatement(node: DoStatement): void {
-            // Go doesn't have do-while, use for with break
             this.emitEmbeddedStatement(node, node.statement);
         }
 
         emitForStatement(node: ForStatement): void {
             this.writeKeyword("for");
             this.writeSpace();
-            this.writePunctuation("(");
             
-            // Init
-            if (node.initializer) {
-                if (node.initializer.kind === ts.SyntaxKind.VariableDeclarationList) {
-                    this.emitVariableDeclarationList(node.initializer as any);
-                } else {
-                    this.emitExpression(node.initializer);
+            const hasInit = !!node.initializer;
+            const hasCond = !!node.condition;
+            const hasPost = !!node.incrementor;
+            
+            if (!hasInit && !hasPost) {
+                if (hasCond) {
+                    this.emitExpression(node.condition);
+                    this.writeSpace();
                 }
+                this.emitEmbeddedStatement(node, node.statement);
+            } else {
+                if (hasInit) {
+                    if (node.initializer!.kind === ts.SyntaxKind.VariableDeclarationList) {
+                        const declList = node.initializer as ts.VariableDeclarationList;
+                        const decl = declList.declarations[0];
+                        this.emit(decl.name);
+                        this.writeSpace();
+                        this.writeOperator(":=");
+                        this.writeSpace();
+                        if (decl.initializer) {
+                            this.emit(decl.initializer);
+                        }
+                    } else {
+                        this.emitExpression(node.initializer!);
+                    }
+                }
+                this.writePunctuation(";");
+                this.writeSpace();
+                
+                if (hasCond) {
+                    this.emitExpression(node.condition!);
+                }
+                this.writePunctuation(";");
+                this.writeSpace();
+                
+                if (hasPost) {
+                    this.emitExpression(node.incrementor!);
+                }
+                
+                this.writeSpace();
+                this.emitEmbeddedStatement(node, node.statement);
             }
-            this.writePunctuation(";");
-            this.writeSpace();
-            
-            // Condition
-            if (node.condition) {
-                this.emitExpression(node.condition);
-            }
-            this.writePunctuation(";");
-            this.writeSpace();
-            
-            // Post
-            if (node.incrementor) {
-                this.emitExpression(node.incrementor);
-            }
-            
-            this.writePunctuation(")");
-            this.writeSpace();
-            this.emitEmbeddedStatement(node, node.statement);
         }
 
         emitForInStatement(node: ForInStatement): void {
@@ -140,7 +152,6 @@ export function StatementsMixin<TBase extends new (...args: any[]) => any>(Base:
         }
 
         emitThrowStatement(node: ThrowStatement): void {
-            // Go uses panic or returns error
             this.write("panic");
             this.writePunctuation("(");
             this.emitExpression(node.expression);
@@ -148,7 +159,6 @@ export function StatementsMixin<TBase extends new (...args: any[]) => any>(Base:
         }
 
         emitTryStatement(node: TryStatement): void {
-            // Go uses defer/recover for panic recovery
             this.emit(node.tryBlock);
         }
 

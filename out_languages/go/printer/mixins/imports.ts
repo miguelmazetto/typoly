@@ -9,7 +9,7 @@ import type {
 
 // Node.js core module mapping to Go stdlib modules
 const NODE_CORE_MODULES: Record<string, string> = {
-    'fs': 'fs',
+    'fs': 'test_package/stdlib/fs',
     'path': 'path',
     'os': 'os',
     'regexp': 'regexp',
@@ -28,7 +28,7 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
     class ImportsMixin extends Base {
         private usedPackages: Set<string> = new Set();
         private importedModuleNames: string[] = [];
-        private headerImports: string[] = [];
+        private needsFmt: boolean = false;
         
         emitImportDeclaration(node: ImportDeclaration): void {
             const moduleSpecifier = node.moduleSpecifier;
@@ -55,7 +55,9 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
             
             // Project import
             const importPath = this.computeImportPath(moduleName);
-            const pkgName = importPath.replace(/\//g, '_').replace(/-/g, '_');
+            // Use the last part of the import path as the package name
+            const pathParts = importPath.split("/");
+            const pkgName = pathParts[pathParts.length - 1];
             this.importedModuleNames.push(pkgName);
             
             if (!node.importClause) {
@@ -87,9 +89,17 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
             // Reset for this file
             this.importedModuleNames = [];
             this.usedPackages = new Set();
-            this.headerImports = [];
+            this.needsFmt = false;
             
             this.currentPackagePath = this.computePackageName(node.fileName);
+            
+            // First pass: check if we need fmt (for console.log)
+            for (const stmt of node.statements) {
+                if (this.containsConsoleLog(stmt)) {
+                    this.needsFmt = true;
+                    break;
+                }
+            }
             
             // Emit package declaration
             this.write("package ");
@@ -105,7 +115,7 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
             }
             
             // Emit imports section
-            if (this.importedPackages.size > 0 || this.usedPackages.size > 0) {
+            if (this.importedPackages.size > 0 || this.usedPackages.size > 0 || this.needsFmt) {
                 this.write("import (");
                 this.writeLine();
                 this.increaseIndent();
@@ -115,6 +125,12 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
                     this.write("\"");
                     this.write(pkg);
                     this.write("\"");
+                    this.writeLine();
+                }
+                
+                // Add fmt if needed
+                if (this.needsFmt) {
+                    this.write("\"fmt\"");
                     this.writeLine();
                 }
                 
@@ -134,12 +150,6 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
             
             // Separate declarations from TLD statements
             const declarations: ts.Statement[] = [];
-            const functionDeclarations: ts.FunctionDeclaration[] = [];
-            const classDeclarations: ts.ClassDeclaration[] = [];
-            const interfaceDeclarations: ts.InterfaceDeclaration[] = [];
-            const enumDeclarations: ts.EnumDeclaration[] = [];
-            const typeAliasDeclarations: ts.TypeAliasDeclaration[] = [];
-            const declarationStatements: ts.Statement[] = [];
             const tldStatements: ts.Statement[] = [];
             
             for (const stmt of node.statements) {
@@ -150,129 +160,34 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
                 
                 if (ts.isVariableStatement(stmt)) {
                     const hasInitializer = stmt.declarationList.declarations.some(d => d.initializer);
-                    if (!hasInitializer) {
-                        declarations.push(stmt);
-                    } else if (this.isSimpleVariableStatement(stmt)) {
-                        declarations.push(stmt);
-                    } else {
-                        declarationStatements.push(stmt);
+                    if (hasInitializer) {
+                        // All variables with initializers go to TLD
                         tldStatements.push(stmt);
+                    } else {
+                        declarations.push(stmt);
                     }
-                } else if (ts.isFunctionDeclaration(stmt)) {
-                    functionDeclarations.push(stmt);
-                    declarations.push(stmt);
-                } else if (ts.isClassDeclaration(stmt)) {
-                    classDeclarations.push(stmt);
-                    declarations.push(stmt);
-                } else if (ts.isInterfaceDeclaration(stmt)) {
-                    interfaceDeclarations.push(stmt);
-                    declarations.push(stmt);
-                } else if (ts.isEnumDeclaration(stmt)) {
-                    enumDeclarations.push(stmt);
-                    declarations.push(stmt);
-                } else if (ts.isTypeAliasDeclaration(stmt)) {
-                    typeAliasDeclarations.push(stmt);
+                } else if (ts.isFunctionDeclaration(stmt) || 
+                           ts.isClassDeclaration(stmt) || 
+                           ts.isInterfaceDeclaration(stmt) ||
+                           ts.isEnumDeclaration(stmt) ||
+                           ts.isTypeAliasDeclaration(stmt)) {
                     declarations.push(stmt);
                 } else {
                     tldStatements.push(stmt);
                 }
             }
             
-            // STEP 1: Forward declarations for types (hoisting support)
-            this.write("// Forward declarations for hoisted types");
-            this.writeLine();
-            
-            // Forward declare classes
-            for (const cls of classDeclarations) {
-                if (cls.name) {
-                    this.write("type ");
-                    this.write(this.toPascalCase(this.getTextOfNode(cls.name)));
-                    this.write(" struct");
-                    this.writeLine();
-                }
+            // Emit declarations at package level (no forward declarations needed in Go)
+            for (const decl of declarations) {
+                this.emit(decl);
             }
-            
-            // Forward declare interfaces
-            for (const iface of interfaceDeclarations) {
-                if (iface.name) {
-                    this.write("type ");
-                    this.write(this.toPascalCase(this.getTextOfNode(iface.name)));
-                    this.write(" interface");
-                    this.writeLine();
-                }
-            }
-            
-            // Emit type aliases
-            for (const typeAlias of typeAliasDeclarations) {
-                this.write("type ");
-                this.emit(typeAlias.name);
-                this.write(" ");
-                this.emit(typeAlias.type);
-                this.writeLine();
-            }
-            
-            this.writeLine();
-            
-            // STEP 2: Forward declarations for functions (hoisting support)
-            this.write("// Forward declarations for hoisted functions");
-            this.writeLine();
-            for (const func of functionDeclarations) {
-                this.emitForwardDeclaration(func);
-            }
-            
-            this.writeLine();
             
             // Always emit __tldInitialized flag
             this.write("var __tldInitialized bool = false");
             this.writeLine();
             this.writeLine();
             
-            // Emit declarations at package level
-            for (const decl of declarations) {
-                if (!tldStatements.includes(decl)) {
-                    this.emit(decl);
-                }
-            }
-            
-            // Emit declarations for variables with complex initializers (types only)
-            for (const stmt of declarationStatements) {
-                if (ts.isVariableStatement(stmt)) {
-                    for (const decl of stmt.declarationList.declarations) {
-                        if (decl.initializer) {
-                            let typeStr: string;
-                            if (decl.type) {
-                                typeStr = this.typeToString(decl.type);
-                            } else if (this.typeChecker) {
-                                try {
-                                    const type = this.typeChecker.getTypeAtLocation(decl);
-                                    if (type && !(type.flags & ts.TypeFlags.Any)) {
-                                        typeStr = this.typeChecker.typeToString(type, decl);
-                                        if (typeStr !== "any") {
-                                            typeStr = this.mapInferredType(typeStr);
-                                        } else {
-                                            typeStr = "interface{}";
-                                        }
-                                    } else {
-                                        typeStr = "interface{}";
-                                    }
-                                } catch {
-                                    typeStr = "interface{}";
-                                }
-                            } else {
-                                typeStr = "interface{}";
-                            }
-                            this.write("var ");
-                            this.write(this.getTextOfNode(decl.name));
-                            this.writeSpace();
-                            this.write(typeStr);
-                            this.writeLine();
-                        }
-                    }
-                }
-            }
-            
             // Always emit __tld() function
-            this.writeLine();
             this.write("func __tld() {");
             this.writeLine();
             this.increaseIndent();
@@ -300,11 +215,10 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
                 if (ts.isVariableStatement(stmt)) {
                     for (const decl of stmt.declarationList.declarations) {
                         if (decl.initializer) {
+                            // Use := for local variable declaration with initialization
                             const name = this.getTextOfNode(decl.name);
                             this.write(name);
-                            this.writeSpace();
-                            this.writeOperator("=");
-                            this.writeSpace();
+                            this.write(" := ");
                             this.emit(decl.initializer);
                             this.writeLine();
                         }
@@ -320,86 +234,20 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
             this.writeLine();
         }
         
-        private isSimpleVariableStatement(stmt: ts.VariableStatement): boolean {
-            for (const decl of stmt.declarationList.declarations) {
-                if (decl.initializer) {
-                    if (!this.isSimpleExpression(decl.initializer)) {
-                        return false;
-                    }
+        // Check if a statement contains console.log
+        private containsConsoleLog(stmt: ts.Statement): boolean {
+            let found = false;
+            const visit = (n: ts.Node) => {
+                if (ts.isPropertyAccessExpression(n) && 
+                    ts.isIdentifier(n.expression) && 
+                    n.expression.text === "console") {
+                    found = true;
+                    return;
                 }
-            }
-            return true;
-        }
-        
-        private isSimpleExpression(expr: Expression): boolean {
-            if (ts.isNumericLiteral(expr) || 
-                ts.isStringLiteral(expr) || 
-                expr.kind === ts.SyntaxKind.TrueKeyword ||
-                expr.kind === ts.SyntaxKind.FalseKeyword ||
-                expr.kind === ts.SyntaxKind.NullKeyword ||
-                expr.kind === ts.SyntaxKind.UndefinedKeyword) {
-                return true;
-            }
-            
-            if (ts.isBinaryExpression(expr)) {
-                const op = expr.operatorToken.kind;
-                if (op === ts.SyntaxKind.PlusToken ||
-                    op === ts.SyntaxKind.MinusToken ||
-                    op === ts.SyntaxKind.AsteriskToken ||
-                    op === ts.SyntaxKind.SlashToken ||
-                    op === ts.SyntaxKind.PercentToken ||
-                    op === ts.SyntaxKind.AsteriskAsteriskToken) {
-                    return this.isSimpleExpression(expr.left) && this.isSimpleExpression(expr.right);
-                }
-            }
-            
-            if (ts.isPrefixUnaryExpression(expr)) {
-                return this.isSimpleExpression(expr.operand);
-            }
-            
-            if (ts.isParenthesizedExpression(expr)) {
-                return this.isSimpleExpression(expr.expression);
-            }
-            
-            return false;
-        }
-        
-        // Emit forward declaration for a function (for hoisting support)
-        private emitForwardDeclaration(node: ts.FunctionDeclaration): void {
-            if (!node.name) return;
-            
-            const funcName = this.toPascalCase(this.getTextOfNode(node.name));
-            const isExported = this.isExported(node);
-            const returnType = node.type ? this.typeToString(node.type) : "";
-            
-            this.write("func ");
-            if (isExported) {
-                this.write(funcName);
-            } else {
-                this.write(funcName.charAt(0).toLowerCase() + funcName.slice(1));
-            }
-            this.writePunctuation("(");
-            this.emitParamsList(node.parameters);
-            this.writePunctuation(")");
-            if (returnType) {
-                this.writeSpace();
-                this.write(returnType);
-            }
-            this.writeLine();
-        }
-        
-        private emitParamsList(params: ts.NodeArray<ts.ParameterDeclaration> | ts.ParameterDeclaration[]): void {
-            for (let i = 0; i < params.length; i++) {
-                const param = params[i];
-                const paramType = param.type ? this.typeToString(param.type) : "interface{}";
-                this.write(this.getTextOfNode(param.name));
-                this.writeSpace();
-                this.write(paramType);
-                if (i < params.length - 1) {
-                    this.writePunctuation(",");
-                    this.writeSpace();
-                }
-            }
+                n.forEachChild(visit);
+            };
+            visit(stmt);
+            return found;
         }
     }
     

@@ -202,17 +202,18 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
         }
         
         emitFunctionDeclaration(node: FunctionDeclaration): void {
-            const funcName = this.toPascalCase(this.getTextOfNode(node.name!));
+            const funcName = this.getTextOfNode(node.name!);
             const isExported = this.isExported(node);
             
             if (node.typeParameters && node.typeParameters.length > 0) {
-                this.writeComment("// Generic function - using interface{}");
+                this.writeComment("// Generic function - simplified");
                 this.writeLine();
             }
             
             this.write("func ");
+            // In Go, exported functions must start with capital letter
             if (isExported) {
-                this.write(funcName);
+                this.write(this.toPascalCase(funcName));
             } else {
                 this.write(funcName.charAt(0).toLowerCase() + funcName.slice(1));
             }
@@ -404,7 +405,8 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
                         }
                     }
                     
-                    if (typeStr) {
+                    // In Go, if there's an initializer, we can omit the type
+                    if (typeStr && !decl.initializer) {
                         this.writeSpace();
                         this.write(typeStr);
                     }
@@ -418,42 +420,37 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
                     
                     this.writeLine();
                 } else {
-                    // Local variable - use var or :=
-                    this.write("var ");
-                    this.write(name);
-                    
-                    let typeStr: string | undefined;
-                    if (decl.type) {
-                        typeStr = this.typeToString(decl.type);
-                    } else if (this.typeChecker && decl.initializer) {
-                        try {
-                            const type = this.typeChecker.getTypeAtLocation(decl);
-                            if (type && !(type.flags & ts.TypeFlags.Any)) {
-                                typeStr = this.typeChecker.typeToString(type, decl);
-                                if (typeStr !== "any") {
-                                    typeStr = this.mapInferredType(typeStr);
-                                } else {
-                                    typeStr = undefined;
-                                }
-                            }
-                        } catch {
-                            typeStr = undefined;
-                        }
-                    }
-                    
-                    if (typeStr) {
-                        this.writeSpace();
-                        this.write(typeStr);
-                    }
-                    
+                    // For local variables with initializer, use := (short declaration)
+                    // For package-level without initializer, use var
                     if (decl.initializer) {
+                        this.write(name);
                         this.writeSpace();
-                        this.writeOperator("=");
+                        this.writeOperator(":=");
                         this.writeSpace();
                         this.emit(decl.initializer);
+                        this.writeLine();
+                        // Add _ = name to suppress unused variable warning
+                        this.write("_ = ");
+                        this.write(name);
+                        this.writeLine();
+                    } else {
+                        this.write("var ");
+                        this.write(name);
+                        
+                        let typeStr: string | undefined;
+                        if (decl.type) {
+                            typeStr = this.typeToString(decl.type);
+                        } else {
+                            typeStr = "interface{}";
+                        }
+                        
+                        if (typeStr) {
+                            this.writeSpace();
+                            this.write(typeStr);
+                        }
+                        
+                        this.writeLine();
                     }
-                    
-                    this.writeLine();
                 }
             }
         }
