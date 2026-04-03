@@ -21,23 +21,18 @@ export class GoPrinterBase extends CPrinter {
         }
     }
 
-    // Module/package name helpers
     protected computePackageName(filePath: string): string {
         const baseDir = process.cwd() || ".";
         let relPath = filePath.replace(/\\/g, "/");
         const baseDirNormalized = baseDir.replace(/\\/g, "/");
-        
         if (relPath.startsWith(baseDirNormalized + "/")) {
             relPath = relPath.substring(baseDirNormalized.length + 1);
         }
-        
         relPath = relPath.replace(/\.go$/, "");
         relPath = relPath.replace(/\.ts$/, "");
         relPath = relPath.replace(/-/g, "_");
         relPath = relPath.replace(/\./g, "_");
         const parts = relPath.split("/").filter(p => p && p !== ".");
-        
-        // Last part is the package name
         return parts[parts.length - 1] || "main";
     }
 
@@ -52,7 +47,6 @@ export class GoPrinterBase extends CPrinter {
         return "test_package/" + name;
     }
 
-    // Type mapping
     protected typeToString(typeNode: TypeNode): string {
         switch (typeNode.kind) {
             case ts.SyntaxKind.StringKeyword:
@@ -67,17 +61,18 @@ export class GoPrinterBase extends CPrinter {
             case ts.SyntaxKind.UnknownKeyword:
                 return "interface{}";
             case ts.SyntaxKind.UndefinedKeyword:
-            case ts.SyntaxKind.NullKeyword:
+                return "interface{}";
+            case ts.SyntaxKind.NullKeyword as unknown as ts.SyntaxKind:
                 return "interface{}";
             case ts.SyntaxKind.NeverKeyword:
+                return "interface{}";
+            case ts.SyntaxKind.UnionType:
                 return "interface{}";
             case ts.SyntaxKind.ArrayType:
                 const elementType = this.typeToString((typeNode as ts.ArrayTypeNode).elementType);
                 return `[]${elementType}`;
             case ts.SyntaxKind.TypeReference:
                 return this.handleTypeReference(typeNode as ts.TypeReferenceNode);
-            case ts.SyntaxKind.UnionType:
-                return "interface{}"; // Go doesn't have union types
             case ts.SyntaxKind.IntersectionType:
                 return "interface{}";
             case ts.SyntaxKind.FunctionType:
@@ -125,7 +120,6 @@ export class GoPrinterBase extends CPrinter {
         return typeName;
     }
 
-    // Type inference using typechecker
     protected mapInferredType(tsType: string): string {
         const typeMap: Record<string, string> = {
             "string": "string",
@@ -180,7 +174,6 @@ export class GoPrinterBase extends CPrinter {
         return [args.slice(0, commaPos).trim(), args.slice(commaPos + 1).trim()];
     }
 
-    // Utility methods
     protected escapeStringForGo(str: string): string {
         return '"' + str
             .replace(/\\/g, '\\\\')
@@ -285,12 +278,8 @@ export class GoPrinterBase extends CPrinter {
     }
     
     private extractArgumentValue(arg: ts.Expression): any {
-        if (ts.isStringLiteral(arg)) {
-            return arg.text;
-        }
-        if (ts.isNumericLiteral(arg)) {
-            return parseFloat(arg.text);
-        }
+        if (ts.isStringLiteral(arg)) return arg.text;
+        if (ts.isNumericLiteral(arg)) return parseFloat(arg.text);
         if (arg.kind === ts.SyntaxKind.TrueKeyword) return true;
         if (arg.kind === ts.SyntaxKind.FalseKeyword) return false;
         if (arg.kind === ts.SyntaxKind.NullKeyword) return null;
@@ -312,10 +301,8 @@ export class GoPrinterBase extends CPrinter {
         optionName: string
     ): string | undefined {
         if (optionParamIndex >= args.length) return undefined;
-        
         const optionsArg = args[optionParamIndex];
         if (!ts.isObjectLiteralExpression(optionsArg)) return undefined;
-        
         for (const prop of optionsArg.properties) {
             if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name)) {
                 if (prop.name.text === optionName && ts.isStringLiteral(prop.initializer)) {

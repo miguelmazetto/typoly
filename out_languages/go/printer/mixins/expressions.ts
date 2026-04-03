@@ -423,11 +423,29 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
         }
 
         emitNewExpression(node: NewExpression): void {
-            const typeName = this.toPascalCase(this.getTextOfNode(node.expression));
-            // In Go, new Type(args) is equivalent to &Type{args...}
-            // But for struct construction, we should use &Type{} with field names
+            const typeName = this.getTextOfNode(node.expression);
+            
+            // Handle RegExp - emit as regexp.MustCompile
+            if (typeName === "RegExp") {
+                this.importedPackages.add("regexp");
+                if (node.arguments && node.arguments.length > 0) {
+                    this.write("regexp.MustCompile");
+                    this.writePunctuation("(");
+                    this.emitExpression(node.arguments[0]);
+                    this.writePunctuation(")");
+                } else {
+                    this.write("regexp.MustCompile");
+                    this.writePunctuation("(");
+                    this.writeStringLiteral("");
+                    this.writePunctuation(")");
+                }
+                return;
+            }
+            
+            // For other types, emit as &Type{}
+            const pascalName = this.toPascalCase(typeName);
             this.write("&");
-            this.write(typeName);
+            this.write(pascalName);
             this.writePunctuation("{");
             for (let i = 0; i < (node.arguments?.length || 0); i++) {
                 this.emitExpression(node.arguments![i]);
@@ -435,9 +453,6 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
                     this.writePunctuation(",");
                     this.writeSpace();
                 }
-            }
-            this.writePunctuation("}");
-        }
             }
             this.writePunctuation("}");
         }

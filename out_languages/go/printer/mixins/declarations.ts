@@ -240,6 +240,24 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
             this.writeLine();
         }
         
+        emitParameter(node: ts.ParameterDeclaration): void {
+            const paramName = this.getTextOfNode(node.name);
+            const paramType = node.type ? this.typeToString(node.type) : "interface{}";
+            
+            this.write(paramName);
+            this.writeSpace();
+            this.write(paramType);
+        }
+        
+        emitParameter(node: ts.ParameterDeclaration): void {
+            const paramName = this.getTextOfNode(node.name);
+            const paramType = node.type ? this.typeToString(node.type) : "interface{}";
+            
+            this.write(paramName);
+            this.writeSpace();
+            this.write(paramType);
+        }
+        
         emitEnumDeclaration(node: EnumDeclaration): void {
             const enumName = this.toPascalCase(this.getTextOfNode(node.name));
             const isExported = this.isExported(node);
