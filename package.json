@@ -1,0 +1,21 @@
+{
+  "name": "typoly-ai",
+  "version": "1.0.0",
+  "type": "module",
+  "module": "index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "typescript-src:generateDiagnosticMessages": "cd node_modules/@typoly/typescript-src && bun scripts/processDiagnosticMessages.mjs src/compiler/diagnosticMessages.json"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@typoly/typescript-src": "github:microsoft/TypeScript#v5.9.3"
+  },
+  "peerDependencies": {
+    "typescript": "5.9.3"
+  },
+  "keywords": [],
+  "author": "miguelmazetto",
+  "license": "MIT",
+  "description": ""
+}

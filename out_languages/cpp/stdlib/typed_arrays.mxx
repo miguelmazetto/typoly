@@ -1,0 +1,336 @@
+module;  // Global module fragment
+
+#include <vector>
+#include <string>
+#include <cstring>
+#include <stdexcept>
+#include <memory>
+#include <algorithm>
+#include <iomanip>
+#include <sstream>
+#include <ios>
+
+export module typoly_std_typed_arrays;
+
+import typoly_std_builtin_basic_types;
+
+export namespace typoly_std_typed_arrays {
+
+using namespace typoly_std_builtin_basic_types;
+
+// =====================================================================
+// ArrayBuffer - represents a generic, fixed-length raw binary data buffer
+// =====================================================================
+class ArrayBuffer {
+public:
+    std::vector<uint8_t> buffer;
+    
+    ArrayBuffer() = default;
+    ArrayBuffer(size_t length) : buffer(length, 0) {}
+    ArrayBuffer(const std::vector<uint8_t>& data) : buffer(data) {}
+    
+    size_t byteLength() const { return buffer.size(); }
+    
+    ArrayBuffer slice(size_t begin = 0, size_t end = std::string::npos) const {
+        size_t actualEnd = (end == std::string::npos) ? buffer.size() : std::min(end, buffer.size());
+        if (begin >= buffer.size()) return ArrayBuffer();
+        return ArrayBuffer(std::vector<uint8_t>(buffer.begin() + begin, buffer.begin() + actualEnd));
+    }
+    
+    uint8_t& operator[](size_t index) { return buffer[index]; }
+    const uint8_t& operator[](size_t index) const { return buffer[index]; }
+    
+    uint8_t* data() { return buffer.data(); }
+    const uint8_t* data() const { return buffer.data(); }
+};
+
+// =====================================================================
+// DataView - provides a low-level interface for reading/writing multiple number types
+// =====================================================================
+class DataView {
+public:
+    std::shared_ptr<ArrayBuffer> arrayBuffer;
+    size_t byteOffset;
+    size_t byteLength;
+    
+    DataView(ArrayBuffer& buffer, size_t byteOffset = 0, size_t byteLength = std::string::npos)
+        : arrayBuffer(std::make_shared<ArrayBuffer>(buffer))
+        , byteOffset(byteOffset) {
+        if (byteLength == std::string::npos) {
+            this->byteLength = buffer.buffer.size() - byteOffset;
+        } else {
+            this->byteLength = byteLength;
+        }
+    }
+    
+    DataView(const std::shared_ptr<ArrayBuffer>& buffer, size_t byteOffset = 0, size_t byteLength = std::string::npos)
+        : arrayBuffer(buffer)
+        , byteOffset(byteOffset) {
+        if (byteLength == std::string::npos) {
+            this->byteLength = buffer->buffer.size() - byteOffset;
+        } else {
+            this->byteLength = byteLength;
+        }
+    }
+    
+    int8_t getInt8(size_t byteOffset) const {
+        return static_cast<int8_t>(arrayBuffer->buffer[this->byteOffset + byteOffset]);
+    }
+    
+    uint8_t getUint8(size_t byteOffset) const {
+        return arrayBuffer->buffer[this->byteOffset + byteOffset];
+    }
+    
+    int16_t getInt16(size_t byteOffset, bool littleEndian = true) const {
+        size_t offset = this->byteOffset + byteOffset;
+        uint16_t val = 0;
+        if (littleEndian) {
+            val = arrayBuffer->buffer[offset] | (arrayBuffer->buffer[offset + 1] << 8);
+        } else {
+            val = (arrayBuffer->buffer[offset] << 8) | arrayBuffer->buffer[offset + 1];
+        }
+        return static_cast<int16_t>(val);
+    }
+    
+    uint16_t getUint16(size_t byteOffset, bool littleEndian = true) const {
+        size_t offset = this->byteOffset + byteOffset;
+        if (littleEndian) {
+            return arrayBuffer->buffer[offset] | (arrayBuffer->buffer[offset + 1] << 8);
+        } else {
+            return (arrayBuffer->buffer[offset] << 8) | arrayBuffer->buffer[offset + 1];
+        }
+    }
+    
+    int32_t getInt32(size_t byteOffset, bool littleEndian = true) const {
+        size_t offset = this->byteOffset + byteOffset;
+        uint32_t val = 0;
+        if (littleEndian) {
+            for (int i = 0; i < 4; i++) val |= arrayBuffer->buffer[offset + i] << (i * 8);
+        } else {
+            for (int i = 0; i < 4; i++) val |= arrayBuffer->buffer[offset + (3 - i)] << (i * 8);
+        }
+        return static_cast<int32_t>(val);
+    }
+    
+    uint32_t getUint32(size_t byteOffset, bool littleEndian = true) const {
+        size_t offset = this->byteOffset + byteOffset;
+        uint32_t val = 0;
+        if (littleEndian) {
+            for (int i = 0; i < 4; i++) val |= arrayBuffer->buffer[offset + i] << (i * 8);
+        } else {
+            for (int i = 0; i < 4; i++) val |= arrayBuffer->buffer[offset + (3 - i)] << (i * 8);
+        }
+        return val;
+    }
+    
+    float getFloat32(size_t byteOffset, bool littleEndian = true) const {
+        uint32_t bits = getUint32(byteOffset, littleEndian);
+        float result;
+        std::memcpy(&result, &bits, sizeof(float));
+        return result;
+    }
+    
+    double getFloat64(size_t byteOffset, bool littleEndian = true) const {
+        uint64_t bits = 0;
+        size_t offset = this->byteOffset + byteOffset;
+        if (littleEndian) {
+            for (int i = 0; i < 8; i++) bits |= static_cast<uint64_t>(arrayBuffer->buffer[offset + i]) << (i * 8);
+        } else {
+            for (int i = 0; i < 8; i++) bits |= static_cast<uint64_t>(arrayBuffer->buffer[offset + (7 - i)]) << (i * 8);
+        }
+        double result;
+        std::memcpy(&result, &bits, sizeof(double));
+        return result;
+    }
+    
+    void setInt8(size_t byteOffset, int8_t value) {
+        arrayBuffer->buffer[this->byteOffset + byteOffset] = static_cast<uint8_t>(value);
+    }
+    
+    void setUint8(size_t byteOffset, uint8_t value) {
+        arrayBuffer->buffer[this->byteOffset + byteOffset] = value;
+    }
+    
+    void setInt16(size_t byteOffset, int16_t value, bool littleEndian = true) {
+        size_t offset = this->byteOffset + byteOffset;
+        uint16_t val = static_cast<uint16_t>(value);
+        if (littleEndian) {
+            arrayBuffer->buffer[offset] = val & 0xFF;
+            arrayBuffer->buffer[offset + 1] = (val >> 8) & 0xFF;
+        } else {
+            arrayBuffer->buffer[offset] = (val >> 8) & 0xFF;
+            arrayBuffer->buffer[offset + 1] = val & 0xFF;
+        }
+    }
+    
+    void setUint16(size_t byteOffset, uint16_t value, bool littleEndian = true) {
+        size_t offset = this->byteOffset + byteOffset;
+        if (littleEndian) {
+            arrayBuffer->buffer[offset] = value & 0xFF;
+            arrayBuffer->buffer[offset + 1] = (value >> 8) & 0xFF;
+        } else {
+            arrayBuffer->buffer[offset] = (value >> 8) & 0xFF;
+            arrayBuffer->buffer[offset + 1] = value & 0xFF;
+        }
+    }
+    
+    void setInt32(size_t byteOffset, int32_t value, bool littleEndian = true) {
+        size_t offset = this->byteOffset + byteOffset;
+        uint32_t val = static_cast<uint32_t>(value);
+        if (littleEndian) {
+            for (int i = 0; i < 4; i++) arrayBuffer->buffer[offset + i] = (val >> (i * 8)) & 0xFF;
+        } else {
+            for (int i = 0; i < 4; i++) arrayBuffer->buffer[offset + (3 - i)] = (val >> (i * 8)) & 0xFF;
+        }
+    }
+    
+    void setUint32(size_t byteOffset, uint32_t value, bool littleEndian = true) {
+        size_t offset = this->byteOffset + byteOffset;
+        if (littleEndian) {
+            for (int i = 0; i < 4; i++) arrayBuffer->buffer[offset + i] = (value >> (i * 8)) & 0xFF;
+        } else {
+            for (int i = 0; i < 4; i++) arrayBuffer->buffer[offset + (3 - i)] = (value >> (i * 8)) & 0xFF;
+        }
+    }
+    
+    void setFloat32(size_t byteOffset, float value, bool littleEndian = true) {
+        uint32_t bits;
+        std::memcpy(&bits, &value, sizeof(float));
+        setUint32(byteOffset, bits, littleEndian);
+    }
+    
+    void setFloat64(size_t byteOffset, double value, bool littleEndian = true) {
+        uint64_t bits;
+        std::memcpy(&bits, &value, sizeof(double));
+        setUint64(byteOffset, bits, littleEndian);
+    }
+    
+private:
+    void setUint64(size_t byteOffset, uint64_t value, bool littleEndian) {
+        size_t offset = this->byteOffset + byteOffset;
+        if (littleEndian) {
+            for (int i = 0; i < 8; i++) arrayBuffer->buffer[offset + i] = (value >> (i * 8)) & 0xFF;
+        } else {
+            for (int i = 0; i < 8; i++) arrayBuffer->buffer[offset + (7 - i)] = (value >> (i * 8)) & 0xFF;
+        }
+    }
+};
+
+// =====================================================================
+// Buffer - Node.js Buffer extends Uint8Array
+// =====================================================================
+class Buffer : public Vector<double> {
+public:
+    Buffer() : Vector<double>() {}
+    Buffer(size_t size) : Vector<double>(size) {}
+    Buffer(const Vector<double>& vec) : Vector<double>(vec) {}
+    
+    // from
+    static Buffer from(const String& str, const String& encoding = String("utf8")) {
+        Buffer buf(str.value.length());
+        for (size_t i = 0; i < str.value.length(); i++) {
+            buf[i] = static_cast<double>(static_cast<uint8_t>(str.value[i]));
+        }
+        return buf;
+    }
+    
+    static Buffer from(const Vector<double>& vec) {
+        Buffer buf(vec.length());
+        for (size_t i = 0; i < vec.length(); i++) {
+            buf[i] = vec[i];
+        }
+        return buf;
+    }
+    
+    static Buffer alloc(size_t size, double fill = 0, const String& encoding = String("utf8")) {
+        Buffer buf(size);
+        for (size_t i = 0; i < size; i++) {
+            buf[i] = fill;
+        }
+        return buf;
+    }
+    
+    static Buffer allocUnsafe(size_t size) {
+        return Buffer(size);
+    }
+    
+    // toString
+    String toString(const String& encoding = String("utf8"), size_t start = 0, size_t end = std::string::npos) const {
+        size_t actualEnd = (end == std::string::npos) ? this->length() : end;
+        std::string result;
+        for (size_t i = start; i < actualEnd && i < this->length(); i++) {
+            result += static_cast<char>(static_cast<uint8_t>(this->vec[i]));
+        }
+        return String(result);
+    }
+    
+    // write
+    size_t write(const String& str, size_t offset = 0, size_t maxLen = std::string::npos, const String& encoding = String("utf8")) const {
+        size_t len = std::min(str.value.length(), maxLen);
+        len = std::min(len, this->length() - offset);
+        for (size_t i = 0; i < len; i++) {
+            const_cast<Buffer*>(this)->vec[offset + i] = static_cast<double>(static_cast<uint8_t>(str.value[i]));
+        }
+        return len;
+    }
+    
+    // concat
+    static Buffer concat(const std::vector<Buffer>& list, size_t totalLength = std::string::npos) {
+        if (totalLength == std::string::npos) {
+            totalLength = 0;
+            for (const auto& buf : list) totalLength += buf.length();
+        }
+        Buffer result(totalLength);
+        size_t offset = 0;
+        for (const auto& buf : list) {
+            for (size_t i = 0; i < buf.length(); i++) {
+                result[offset++] = buf[i];
+            }
+        }
+        return result;
+    }
+    
+    // compare
+    static int compare(const Buffer& buf1, const Buffer& buf2) {
+        size_t len = std::min(buf1.length(), buf2.length());
+        for (size_t i = 0; i < len; i++) {
+            if (buf1[i] < buf2[i]) return -1;
+            if (buf1[i] > buf2[i]) return 1;
+        }
+        if (buf1.length() < buf2.length()) return -1;
+        if (buf1.length() > buf2.length()) return 1;
+        return 0;
+    }
+    
+    // equals
+    bool equals(const Buffer& other) const {
+        if (this->length() != other.length()) return false;
+        for (size_t i = 0; i < this->length(); i++) {
+            if (this->vec[i] != other.vec[i]) return false;
+        }
+        return true;
+    }
+    
+    // indexOf
+    size_t indexOf(const Buffer& search, size_t offset = 0) const {
+        if (search.length() > this->length() - offset) return std::string::npos;
+        for (size_t i = offset; i <= this->length() - search.length(); i++) {
+            bool found = true;
+            for (size_t j = 0; j < search.length(); j++) {
+                if (this->vec[i + j] != search.vec[j]) {
+                    found = false;
+                    break;
+                }
+            }
+            if (found) return i;
+        }
+        return std::string::npos;
+    }
+    
+    // includes
+    bool includes(const Buffer& search, size_t offset = 0) const {
+        return indexOf(search, offset) != std::string::npos;
+    }
+};
+
+}  // namespace typoly_std_typed_arrays

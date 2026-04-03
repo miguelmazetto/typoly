@@ -1,0 +1,5 @@
+{
+    "name": "test-package",
+    "main": "test.ts",
+    "version": "1.0.0"
+}

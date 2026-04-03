@@ -1,0 +1,654 @@
+module;  // Global module fragment
+
+#include <vector>
+#include <string>
+#include <map>
+#include <set>
+#include <variant>
+#include <optional>
+#include <functional>
+#include <memory>
+#include <any>
+#include <iostream>
+#include <sstream>
+#include <algorithm>
+#include <numeric>
+#include <cstdint>
+#include <future>
+
+export module typoly_std_builtin_basic_types;
+
+import typoly_std_union;
+
+export namespace typoly_std_builtin_basic_types {
+
+// Re-export Union from union module
+using typoly_std_union::Union;
+
+// Forward declarations
+template<typename T> class Vector;
+
+// =====================================================================
+// String type - wraps std::string with JS-like API
+// =====================================================================
+class String {
+public:
+    std::string value;
+    
+    String() : value("") {}
+    String(const char* s) : value(s ? s : "") {}
+    String(const std::string& s) : value(s) {}
+    String(const String& s) : value(s.value) {}
+    
+    // Constructors for primitive types
+    String(int n) : value(std::to_string(n)) {}
+    String(long n) : value(std::to_string(n)) {}
+    String(long long n) : value(std::to_string(n)) {}
+    String(double n) : value(std::to_string(n)) {}
+    String(float n) : value(std::to_string(n)) {}
+    String(bool b) : value(b ? "true" : "false") {}
+    
+    // Length
+    size_t length() const { return value.length(); }
+    size_t size() const { return value.size(); }
+    bool empty() const { return value.empty(); }
+    
+    // Concatenation operators
+    String operator+(const String& other) const { return String(value + other.value); }
+    String operator+(const char* other) const { return String(value + other); }
+    String operator+(const std::string& other) const { return String(value + other); }
+    String operator+(int n) const { return String(value + std::to_string(n)); }
+    String operator+(long n) const { return String(value + std::to_string(n)); }
+    String operator+(long long n) const { return String(value + std::to_string(n)); }
+    String operator+(double n) const { return String(value + std::to_string(n)); }
+    String operator+(float n) const { return String(value + std::to_string(n)); }
+    String operator+(bool b) const { return String(value + (b ? "true" : "false")); }
+    
+    friend String operator+(const char* lhs, const String& rhs) { return String(lhs) + rhs; }
+    friend String operator+(const std::string& lhs, const String& rhs) { return String(lhs) + rhs; }
+    friend String operator+(int lhs, const String& rhs) { return String(lhs) + rhs; }
+    friend String operator+(double lhs, const String& rhs) { return String(lhs) + rhs; }
+    
+    // Compound assignment
+    String& operator+=(const String& other) { value += other.value; return *this; }
+    String& operator+=(const char* other) { value += other; return *this; }
+    String& operator+=(const std::string& other) { value += other; return *this; }
+    String& operator+=(int n) { value += std::to_string(n); return *this; }
+    String& operator+=(double n) { value += std::to_string(n); return *this; }
+    String& operator+=(bool b) { value += (b ? "true" : "false"); return *this; }
+    
+    // Assignment
+    String& operator=(const String& other) { value = other.value; return *this; }
+    String& operator=(const char* other) { value = other ? other : ""; return *this; }
+    
+    // Comparison operators
+    bool operator==(const String& other) const { return value == other.value; }
+    bool operator!=(const String& other) const { return value != other.value; }
+    bool operator<(const String& other) const { return value < other.value; }
+    bool operator>(const String& other) const { return value > other.value; }
+    bool operator<=(const String& other) const { return value <= other.value; }
+    bool operator>=(const String& other) const { return value >= other.value; }
+    bool operator==(const char* other) const { return value == other; }
+    bool operator!=(const char* other) const { return value != other; }
+    
+    // Index operator
+    char operator[](size_t index) const { return value[index]; }
+    char& operator[](size_t index) { return value[index]; }
+    
+    // Stream operator
+    friend std::ostream& operator<<(std::ostream& os, const String& s) { return os << s.value; }
+    
+    // JS-like methods
+    String charAt(size_t index) const {
+        if (index >= value.length()) return String("");
+        return String(1, value[index]);
+    }
+    
+    int charCodeAt(size_t index) const {
+        if (index >= value.length()) return -1;
+        return static_cast<int>(value[index]);
+    }
+    
+    String concat(const String& other) const { return String(value + other.value); }
+    
+    bool includes(const String& searchStr, size_t start = 0) const {
+        return value.find(searchStr.value, start) != std::string::npos;
+    }
+    
+    bool endsWith(const String& searchStr, size_t length = std::string::npos) const {
+        size_t len = (length == std::string::npos) ? value.length() : length;
+        if (len < searchStr.length()) return false;
+        return value.compare(len - searchStr.length(), searchStr.length(), searchStr.value) == 0;
+    }
+    
+    size_t indexOf(const String& searchStr, size_t start = 0) const {
+        auto pos = value.find(searchStr.value, start);
+        return pos == std::string::npos ? static_cast<size_t>(-1) : pos;
+    }
+    
+    size_t lastIndexOf(const String& searchStr, size_t start = std::string::npos) const {
+        auto pos = value.rfind(searchStr.value, start);
+        return pos == std::string::npos ? static_cast<size_t>(-1) : pos;
+    }
+    
+    String padEnd(size_t targetLength, const String& padString = String(" ")) const {
+        if (value.length() >= targetLength) return *this;
+        size_t padLen = targetLength - value.length();
+        std::string result = value;
+        while (result.length() < targetLength) {
+            size_t toAdd = std::min(padLen, padString.length());
+            result += padString.value.substr(0, toAdd);
+            padLen -= toAdd;
+        }
+        return String(result);
+    }
+    
+    String padStart(size_t targetLength, const String& padString = String(" ")) const {
+        if (value.length() >= targetLength) return *this;
+        size_t padLen = targetLength - value.length();
+        std::string result;
+        while (result.length() + value.length() < targetLength) {
+            size_t toAdd = std::min(padLen, padString.length());
+            result = padString.value.substr(0, toAdd) + result;
+            padLen -= toAdd;
+        }
+        return String(result + value);
+    }
+    
+    String repeat(size_t count) const {
+        std::string result;
+        result.reserve(value.length() * count);
+        for (size_t i = 0; i < count; i++) {
+            result += value;
+        }
+        return String(result);
+    }
+    
+    String replace(const String& searchValue, const String& replaceValue) const {
+        std::string result = value;
+        size_t pos = result.find(searchValue.value);
+        if (pos != std::string::npos) {
+            result.replace(pos, searchValue.value.length(), replaceValue.value);
+        }
+        return String(result);
+    }
+    
+    String replaceAll(const String& searchValue, const String& replaceValue) const {
+        std::string result = value;
+        size_t pos = 0;
+        while ((pos = result.find(searchValue.value, pos)) != std::string::npos) {
+            result.replace(pos, searchValue.value.length(), replaceValue.value);
+            pos += replaceValue.value.length();
+        }
+        return String(result);
+    }
+    
+    Vector<String> split(const String& separator = String(""), size_t limit = std::string::npos) const;
+    
+    bool startsWith(const String& searchStr, size_t start = 0) const {
+        if (start > value.length()) return false;
+        return value.compare(start, searchStr.value.length(), searchStr.value) == 0;
+    }
+    
+    String substring(size_t start, size_t end = std::string::npos) const {
+        if (start >= value.length()) return String("");
+        size_t actualEnd = (end == std::string::npos) ? value.length() : std::min(end, value.length());
+        if (actualEnd <= start) return String("");
+        return String(value.substr(start, actualEnd - start));
+    }
+    
+    String slice(size_t start, size_t end = std::string::npos) const {
+        size_t len = value.length();
+        size_t actualStart = (start >= 0) ? start : (len + start);
+        size_t actualEnd = (end == std::string::npos) ? len : ((end >= 0) ? end : (len + end));
+        if (actualStart >= len) return String("");
+        actualEnd = std::min(actualEnd, len);
+        if (actualEnd <= actualStart) return String("");
+        return String(value.substr(actualStart, actualEnd - actualStart));
+    }
+    
+    String toLowerCase() const {
+        std::string result = value;
+        std::transform(result.begin(), result.end(), result.begin(), ::tolower);
+        return String(result);
+    }
+    
+    String toUpperCase() const {
+        std::string result = value;
+        std::transform(result.begin(), result.end(), result.begin(), ::toupper);
+        return String(result);
+    }
+    
+    String trim() const {
+        size_t start = value.find_first_not_of(" \t\n\r\f\v");
+        if (start == std::string::npos) return String("");
+        size_t end = value.find_last_not_of(" \t\n\r\f\v");
+        return String(value.substr(start, end - start + 1));
+    }
+    
+    String trimStart() const {
+        size_t start = value.find_first_not_of(" \t\n\r\f\v");
+        if (start == std::string::npos) return String("");
+        return String(value.substr(start));
+    }
+    
+    String trimEnd() const {
+        size_t end = value.find_last_not_of(" \t\n\r\f\v");
+        if (end == std::string::npos) return String("");
+        return String(value.substr(0, end + 1));
+    }
+    
+    template<typename Func>
+    void forEach(Func func) const {
+        for (size_t i = 0; i < value.length(); i++) {
+            func(String(1, value[i]), i);
+        }
+    }
+    
+    // Conversion
+    std::string toString() const { return value; }
+    const char* c_str() const { return value.c_str(); }
+    operator const char*() const { return value.c_str(); }
+    operator std::string() const { return value; }
+    
+    // Static methods
+    static String fromCharCode(int code) {
+        return String(1, static_cast<char>(code));
+    }
+
+private:
+    String(size_t count, char c) : value(count, c) {}
+};
+
+// =====================================================================
+// Vector type - wraps std::vector with JS-like API
+// =====================================================================
+template<typename T>
+class Vector {
+public:
+    std::vector<T> vec;
+    
+    Vector() = default;
+    Vector(std::initializer_list<T> init) : vec(init) {}
+    Vector(const std::vector<T>& v) : vec(v) {}
+    Vector(size_t size) : vec(size) {}
+    Vector(size_t size, const T& value) : vec(size, value) {}
+    
+    template<typename InputIt>
+    Vector(InputIt first, InputIt last) : vec(first, last) {}
+    
+    // Size
+    size_t length() const { return vec.size(); }
+    size_t size() const { return vec.size(); }
+    bool empty() const { return vec.empty(); }
+    
+    // Index operators
+    T& operator[](size_t index) { return vec[index]; }
+    const T& operator[](size_t index) const { return vec[index]; }
+    T& at(size_t index) { return vec.at(index); }
+    const T& at(size_t index) const { return vec.at(index); }
+    
+    // Concatenation
+    Vector<T> operator+(const Vector<T>& other) const {
+        Vector<T> result = *this;
+        result.vec.insert(result.vec.end(), other.vec.begin(), other.vec.end());
+        return result;
+    }
+    
+    // Comparison
+    bool operator==(const Vector<T>& other) const { return vec == other.vec; }
+    bool operator!=(const Vector<T>& other) const { return vec != other.vec; }
+    
+    // Iterators
+    auto begin() { return vec.begin(); }
+    auto end() { return vec.end(); }
+    auto begin() const { return vec.begin(); }
+    auto end() const { return vec.end(); }
+    auto rbegin() { return vec.rbegin(); }
+    auto rend() { return vec.rend(); }
+    auto rbegin() const { return vec.rbegin(); }
+    auto rend() const { return vec.rend(); }
+    
+    // Front/Back
+    T& front() { return vec.front(); }
+    const T& front() const { return vec.front(); }
+    T& back() { return vec.back(); }
+    const T& back() const { return vec.back(); }
+    
+    // Mutation methods
+    void push(const T& item) { vec.push_back(item); }
+    void push(T&& item) { vec.push_back(std::move(item)); }
+    
+    T pop() {
+        T item = std::move(vec.back());
+        vec.pop_back();
+        return item;
+    }
+    
+    void unshift(const T& item) { vec.insert(vec.begin(), item); }
+    
+    T shift() {
+        T item = std::move(vec.front());
+        vec.erase(vec.begin());
+        return item;
+    }
+    
+    Vector<T>& splice(size_t start, size_t deleteCount = std::string::npos) {
+        size_t actualDelete = (deleteCount == std::string::npos) ? 
+            (vec.size() - start) : deleteCount;
+        vec.erase(vec.begin() + start, vec.begin() + start + actualDelete);
+        return *this;
+    }
+    
+    Vector<T>& sort() {
+        std::sort(vec.begin(), vec.end());
+        return *this;
+    }
+    
+    template<typename Compare>
+    Vector<T>& sort(Compare comp) {
+        std::sort(vec.begin(), vec.end(), comp);
+        return *this;
+    }
+    
+    Vector<T>& reverse() {
+        std::reverse(vec.begin(), vec.end());
+        return *this;
+    }
+    
+    void fill(const T& value, size_t start = 0, size_t end = std::string::npos) {
+        size_t actualEnd = (end == std::string::npos) ? vec.size() : end;
+        std::fill(vec.begin() + start, vec.begin() + actualEnd, value);
+    }
+    
+    // Query methods
+    bool includes(const T& searchElement, size_t fromIndex = 0) const {
+        for (size_t i = fromIndex; i < vec.size(); i++) {
+            if (vec[i] == searchElement) return true;
+        }
+        return false;
+    }
+    
+    size_t indexOf(const T& searchElement, size_t fromIndex = 0) const {
+        for (size_t i = fromIndex; i < vec.size(); i++) {
+            if (vec[i] == searchElement) return i;
+        }
+        return static_cast<size_t>(-1);
+    }
+    
+    size_t lastIndexOf(const T& searchElement) const {
+        for (size_t i = vec.size(); i > 0; i--) {
+            if (vec[i-1] == searchElement) return i-1;
+        }
+        return static_cast<size_t>(-1);
+    }
+    
+    // Slice - returns a shallow copy
+    Vector<T> slice(size_t start = 0, size_t end = std::string::npos) const {
+        size_t actualEnd = (end == std::string::npos) ? vec.size() : std::min(end, vec.size());
+        if (start >= vec.size()) return Vector<T>();
+        return Vector<T>(vec.begin() + start, vec.begin() + actualEnd);
+    }
+    
+    // Functional methods
+    template<typename Func>
+    void forEach(Func func) const {
+        for (size_t i = 0; i < vec.size(); i++) {
+            func(vec[i], i, *this);
+        }
+    }
+    
+    template<typename Func>
+    auto map(Func func) const -> Vector<decltype(func(std::declval<T>()))> {
+        using R = decltype(func(std::declval<T>()));
+        Vector<R> result;
+        result.vec.reserve(vec.size());
+        for (const auto& item : vec) {
+            result.vec.push_back(func(item));
+        }
+        return result;
+    }
+    
+    template<typename Func>
+    Vector<T> filter(Func func) const {
+        Vector<T> result;
+        for (const auto& item : vec) {
+            if (func(item)) {
+                result.vec.push_back(item);
+            }
+        }
+        return result;
+    }
+    
+    template<typename Func, typename R>
+    R reduce(Func func, R initialValue) const {
+        R result = initialValue;
+        for (const auto& item : vec) {
+            result = func(result, item);
+        }
+        return result;
+    }
+    
+    template<typename Func>
+    bool some(Func func) const {
+        for (const auto& item : vec) {
+            if (func(item)) return true;
+        }
+        return false;
+    }
+    
+    template<typename Func>
+    bool every(Func func) const {
+        for (const auto& item : vec) {
+            if (!func(item)) return false;
+        }
+        return true;
+    }
+    
+    // Join
+    String join(const String& separator = String(",")) const {
+        std::ostringstream oss;
+        for (size_t i = 0; i < vec.size(); i++) {
+            if (i > 0) oss << separator.value;
+            oss << vec[i];
+        }
+        return String(oss.str());
+    }
+    
+    // Conversion
+    std::vector<T> toArray() const { return vec; }
+    operator std::vector<T>() const { return vec; }
+};
+
+// =====================================================================
+// Map type - wraps std::map with JS-like API
+// =====================================================================
+template<typename K, typename V>
+class Map {
+public:
+    std::map<K, V> map;
+    
+    Map() = default;
+    Map(std::initializer_list<std::pair<const K, V>> init) : map(init) {}
+    Map(const std::map<K, V>& m) : map(m) {}
+    
+    // Size
+    size_t size() const { return map.size(); }
+    bool empty() const { return map.empty(); }
+    
+    // Access
+    V& operator[](const K& key) { return map[key]; }
+    const V& operator[](const K& key) const { return map.at(key); }
+    
+    V& get(const K& key) { return map[key]; }
+    const V& get(const K& key) const { return map.at(key); }
+    
+    // Mutation
+    Map<K, V>& set(const K& key, const V& value) {
+        map[key] = value;
+        return *this;
+    }
+    
+    bool has(const K& key) const {
+        return map.find(key) != map.end();
+    }
+    
+    bool delete_(const K& key) {
+        return map.erase(key) > 0;
+    }
+    
+    void clear() { map.clear(); }
+    
+    // Iterators
+    auto begin() { return map.begin(); }
+    auto end() { return map.end(); }
+    auto begin() const { return map.begin(); }
+    auto end() const { return map.end(); }
+    
+    // Functional
+    template<typename Func>
+    void forEach(Func func) const {
+        for (const auto& [key, value] : map) {
+            func(value, key, *this);
+        }
+    }
+    
+    Vector<K> keys() const {
+        Vector<K> result;
+        for (const auto& [key, value] : map) {
+            result.push(key);
+        }
+        return result;
+    }
+    
+    Vector<V> values() const {
+        Vector<V> result;
+        for (const auto& [key, value] : map) {
+            result.push(value);
+        }
+        return result;
+    }
+};
+
+// =====================================================================
+// Set type - wraps std::set with JS-like API
+// =====================================================================
+template<typename T>
+class Set {
+public:
+    std::set<T> s;
+    
+    Set() = default;
+    Set(std::initializer_list<T> init) : s(init) {}
+    Set(const std::set<T>& other) : s(other) {}
+    
+    // Size
+    size_t size() const { return s.size(); }
+    bool empty() const { return s.empty(); }
+    
+    // Mutation
+    Set<T>& add(const T& item) {
+        s.insert(item);
+        return *this;
+    }
+    
+    bool has(const T& item) const {
+        return s.find(item) != s.end();
+    }
+    
+    bool delete_(const T& item) {
+        return s.erase(item) > 0;
+    }
+    
+    void clear() { s.clear(); }
+    
+    // Iterators
+    auto begin() { return s.begin(); }
+    auto end() { return s.end(); }
+    auto begin() const { return s.begin(); }
+    auto end() const { return s.end(); }
+    
+    // Conversion
+    Vector<T> values() const {
+        return Vector<T>(s.begin(), s.end());
+    }
+    
+    template<typename Func>
+    void forEach(Func func) const {
+        for (const auto& item : s) {
+            func(item, item, *this);
+        }
+    }
+};
+
+// =====================================================================
+// Value type - a universal wrapper for any type (like JS any)
+// =====================================================================
+class Value {
+public:
+    std::any data;
+    
+    Value() = default;
+    Value(std::nullptr_t) : data(nullptr) {}
+    
+    template<typename T>
+    Value(T&& val) : data(std::forward<T>(val)) {}
+    
+    template<typename T>
+    T as() const {
+        return std::any_cast<T>(data);
+    }
+    
+    template<typename T>
+    bool is() const {
+        return data.type() == typeid(T);
+    }
+    
+    bool isNull() const { return !data.has_value(); }
+    bool hasValue() const { return data.has_value(); }
+    
+    friend std::ostream& operator<<(std::ostream& os, const Value& v) {
+        if (!v.data.has_value()) return os << "undefined";
+        return os << "[Value]";
+    }
+};
+
+// =====================================================================
+// Variant type - wraps std::variant
+// =====================================================================
+template<typename... Ts>
+using Variant = std::variant<Ts...>;
+
+// =====================================================================
+// Promise type - wraps std::future
+// =====================================================================
+template<typename T>
+using Promise = std::future<T>;
+
+// =====================================================================
+// Function type wrapper
+// =====================================================================
+template<typename R, typename... Args>
+using Function = std::function<R(Args...)>;
+
+// Deferred implementation of String::split
+Vector<String> String::split(const String& separator, size_t limit) const {
+    Vector<String> result;
+    if (separator.empty()) {
+        for (size_t i = 0; i < value.length() && result.size() < limit; i++) {
+            result.push(String(1, value[i]));
+        }
+        return result;
+    }
+    size_t start = 0;
+    size_t end = value.find(separator.value);
+    while (end != std::string::npos && result.size() < limit - 1) {
+        result.push(String(value.substr(start, end - start)));
+        start = end + separator.value.length();
+        end = value.find(separator.value, start);
+    }
+    result.push(String(value.substr(start)));
+    return result;
+}
+
+}  // namespace typoly_std_builtin_basic_types

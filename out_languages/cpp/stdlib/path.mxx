@@ -1,0 +1,122 @@
+module;  // Global module fragment
+
+#include <filesystem>
+#include <string>
+#include <vector>
+#include <sstream>
+
+export module typoly_std_path;
+
+import typoly_std_builtin_basic_types;
+
+export namespace typoly_std_path {
+
+using namespace typoly_std_builtin_basic_types;
+
+namespace path_impl = std::filesystem;
+
+// Path separator
+constexpr const char* sep = "/";
+
+// Platform-specific path separator
+#ifdef _WIN32
+constexpr const char* delimiter = ";";
+#else
+constexpr const char* delimiter = ":";
+#endif
+
+// basename(path, ext?) - Returns the last portion of a path
+inline String basename(const String& path) {
+    return String(path_impl::path(path.value).filename().string());
+}
+
+inline String basename(const String& path, const String& ext) {
+    auto filename = path_impl::path(path.value).filename().string();
+    if (!ext.value.empty() && filename.size() >= ext.value.size() &&
+        filename.substr(filename.size() - ext.value.size()) == ext.value) {
+        filename = filename.substr(0, filename.size() - ext.value.size());
+    }
+    return String(filename);
+}
+
+// dirname(path) - Returns the directory name of a path
+inline String dirname(const String& path) {
+    return String(path_impl::path(path.value).parent_path().string());
+}
+
+// extname(path) - Returns the extension of the path
+inline String extname(const String& path) {
+    return String(path_impl::path(path.value).extension().string());
+}
+
+// format(pathObject) - Returns a path string from an object
+inline String format(const String& dir, const String& name, const String& ext) {
+    auto result = path_impl::path(dir.value) / (name.value + ext.value);
+    return String(result.string());
+}
+
+// isAbsolute(path) - Determines if path is absolute
+inline bool isAbsolute(const String& path) {
+    return path_impl::path(path.value).is_absolute();
+}
+
+// join(...paths) - Joins all given path segments
+inline String join(const String& a, const String& b) {
+    return String((path_impl::path(a.value) / b.value).string());
+}
+
+inline String join(const String& a, const String& b, const String& c) {
+    return String((path_impl::path(a.value) / b.value / c.value).string());
+}
+
+// normalize(path) - Normalizes the given path
+inline String normalize(const String& path) {
+    return String(path_impl::path(path.value).lexically_normal().string());
+}
+
+// parse(path) - Returns an object whose properties represent significant elements of the path
+inline String parseRoot(const String& path) {
+    return String(path_impl::path(path.value).root_path().string());
+}
+
+inline String parseDir(const String& path) {
+    return String(path_impl::path(path.value).parent_path().string());
+}
+
+inline String parseBase(const String& path) {
+    return String(path_impl::path(path.value).filename().string());
+}
+
+inline String parseExt(const String& path) {
+    return String(path_impl::path(path.value).extension().string());
+}
+
+inline String parseName(const String& path) {
+    return String(path_impl::path(path.value).stem().string());
+}
+
+// relative(from, to) - Resolves a sequence of paths to an absolute path
+inline String relative(const String& from, const String& to) {
+    return String(path_impl::relative(from.value, to.value).string());
+}
+
+// resolve(...paths) - Resolves a sequence of paths to an absolute path
+inline String resolve(const String& path) {
+    return String(path_impl::absolute(path.value).string());
+}
+
+inline String resolve(const String& from, const String& to) {
+    return String((path_impl::absolute(from.value) / to.value).string());
+}
+
+// toNamespacedPath(path) - Returns the namespace equivalent of the given path (Windows only)
+inline String toNamespacedPath(const String& path) {
+#ifdef _WIN32
+    // On Windows, return the path as-is for now
+    return path;
+#else
+    return path;
+#endif
+}
+
+}

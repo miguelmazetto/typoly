@@ -1,0 +1,234 @@
+module;  // Global module fragment
+
+#include <iostream>
+#include <string>
+#include <map>
+#include <chrono>
+
+export module typoly_std_console;
+
+import typoly_std_builtin_basic_types;
+
+export namespace typoly_std_console {
+
+using namespace typoly_std_builtin_basic_types;
+
+// Variadic helper for output - handles String specially
+template<typename T>
+inline void printArg(const T& arg) {
+    std::cout << arg;
+}
+
+template<>
+inline void printArg<String>(const String& arg) {
+    std::cout << arg.value;
+}
+
+// Overload for String that outputs its value
+inline void printArg(const String& arg) {
+    std::cout << arg.value;
+}
+
+// Console methods - empty call
+inline void log() {
+    std::cout << "\n";
+}
+
+// Single argument
+template<typename T>
+inline void log(const T& arg) {
+    printArg(arg);
+    std::cout << "\n";
+}
+
+// Multiple arguments
+template<typename T, typename... Args>
+inline void log(const T& first, const Args&... args) {
+    printArg(first);
+    ((std::cout << " ", printArg(args)), ...);
+    std::cout << "\n";
+}
+
+// info
+inline void info() {
+    std::cout << "\n";
+}
+
+template<typename T>
+inline void info(const T& arg) {
+    printArg(arg);
+    std::cout << "\n";
+}
+
+template<typename T, typename... Args>
+inline void info(const T& first, const Args&... args) {
+    printArg(first);
+    ((std::cout << " ", printArg(args)), ...);
+    std::cout << "\n";
+}
+
+// warn
+inline void warn() {
+    std::cerr << "\n";
+}
+
+template<typename T>
+inline void warn(const T& arg) {
+    printArg(arg);
+    std::cerr << "\n";
+}
+
+template<typename T, typename... Args>
+inline void warn(const T& first, const Args&... args) {
+    printArg(first);
+    ((std::cerr << " ", printArg(args)), ...);
+    std::cerr << "\n";
+}
+
+// error
+inline void error() {
+    std::cerr << "\n";
+}
+
+template<typename T>
+inline void error(const T& arg) {
+    printArg(arg);
+    std::cerr << "\n";
+}
+
+template<typename T, typename... Args>
+inline void error(const T& first, const Args&... args) {
+    printArg(first);
+    ((std::cerr << " ", printArg(args)), ...);
+    std::cerr << "\n";
+}
+
+// debug
+inline void debug() {
+    std::cout << "\n";
+}
+
+template<typename T>
+inline void debug(const T& arg) {
+    printArg(arg);
+    std::cout << "\n";
+}
+
+template<typename T, typename... Args>
+inline void debug(const T& first, const Args&... args) {
+    printArg(first);
+    ((std::cout << " ", printArg(args)), ...);
+    std::cout << "\n";
+}
+
+// dir
+inline void dir() {
+    std::cout << "\n";
+}
+
+template<typename T>
+inline void dir(const T& arg) {
+    printArg(arg);
+    std::cout << "\n";
+}
+
+// table
+inline void table() {
+    std::cout << "\n";
+}
+
+template<typename T>
+inline void table(const T& arg) {
+    printArg(arg);
+    std::cout << "\n";
+}
+
+// trace
+inline void trace() {
+    std::cout << "\n";
+}
+
+template<typename T>
+inline void trace(const T& arg) {
+    printArg(arg);
+    std::cout << "\n";
+}
+
+// assert
+inline void assert_(bool condition) {
+    if (!condition) {
+        std::cerr << "Assertion failed\n";
+    }
+}
+
+template<typename T>
+inline void assert_(bool condition, const T& message) {
+    if (!condition) {
+        std::cerr << "Assertion failed: ";
+        printArg(message);
+        std::cerr << "\n";
+    }
+}
+
+// clear
+inline void clear() {
+    std::cout << "\033[2J\033[1;1H";
+}
+
+// count
+inline void count() {
+    static std::map<std::string, int> counters;
+    counters["default"]++;
+    std::cout << "default: " << counters["default"] << "\n";
+}
+
+inline void count(const String& label) {
+    static std::map<std::string, int> counters;
+    counters[label.value]++;
+    std::cout << label.value << ": " << counters[label.value] << "\n";
+}
+
+inline void countReset() {
+    static std::map<std::string, int> counters;
+    counters.clear();
+}
+
+inline void countReset(const String& label) {
+    static std::map<std::string, int> counters;
+    counters.erase(label.value);
+}
+
+// time
+inline void time() {
+    static std::map<std::string, std::chrono::steady_clock::time_point> timers;
+    timers["default"] = std::chrono::steady_clock::now();
+}
+
+inline void time(const String& label) {
+    static std::map<std::string, std::chrono::steady_clock::time_point> timers;
+    timers[label.value] = std::chrono::steady_clock::now();
+}
+
+inline void timeEnd() {
+    static std::map<std::string, std::chrono::steady_clock::time_point> timers;
+    auto it = timers.find("default");
+    if (it != timers.end()) {
+        auto duration = std::chrono::steady_clock::now() - it->second;
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+        std::cout << "default: " << ms << "ms\n";
+        timers.erase(it);
+    }
+}
+
+inline void timeEnd(const String& label) {
+    static std::map<std::string, std::chrono::steady_clock::time_point> timers;
+    auto it = timers.find(label.value);
+    if (it != timers.end()) {
+        auto duration = std::chrono::steady_clock::now() - it->second;
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+        std::cout << label.value << ": " << ms << "ms\n";
+        timers.erase(it);
+    }
+}
+
+}

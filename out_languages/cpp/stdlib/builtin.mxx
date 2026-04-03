@@ -1,0 +1,123 @@
+module;  // Global module fragment
+
+// Re-export headers from dependencies
+#include <vector>
+#include <string>
+#include <map>
+#include <set>
+#include <variant>
+#include <optional>
+#include <functional>
+#include <memory>
+#include <any>
+#include <iostream>
+#include <sstream>
+
+export module typoly_std_builtin;
+
+import typoly_std_builtin_basic_types;
+import typoly_std_console;
+import typoly_std_math;
+import typoly_std_json;
+import typoly_std_regexp;
+import typoly_std_date;
+import typoly_std_union;
+
+export namespace typoly_std_builtin {
+
+// Re-export all types from basic_types
+using String = typoly_std_builtin_basic_types::String;
+using Value = typoly_std_builtin_basic_types::Value;
+
+// Re-export template types
+template<typename T>
+using Vector = typoly_std_builtin_basic_types::Vector<T>;
+
+template<typename K, typename V>
+using Map = typoly_std_builtin_basic_types::Map<K, V>;
+
+template<typename T>
+using Set = typoly_std_builtin_basic_types::Set<T>;
+
+// Re-export Union from union module
+template<typename... Ts>
+using Union = ::typoly_std_union::Union<Ts...>;
+
+template<typename T>
+using shared_ptr = std::shared_ptr<T>;
+
+// Re-export json module
+using namespace typoly_std_json;
+
+// Re-export regexp module
+using namespace typoly_std_regexp;
+// Also export RegExp type directly for `new RegExp()` usage
+using RegExp = typoly_std_regexp::RegExp;
+using MatchResult = typoly_std_regexp::MatchResult;
+// Also export RegExp type directly for `new RegExp()` usage
+using RegExp = typoly_std_regexp::RegExp;
+using MatchResult = typoly_std_regexp::MatchResult;
+
+// Re-export date module
+using namespace typoly_std_date;
+
+// Re-export math module
+using namespace typoly_std_math;
+
+// Process argv support - populated by main()
+inline Vector<String> argv;
+
+inline void initArgv(int argc, char* c_argv[]) {
+    for (int i = 0; i < argc; i++) {
+        argv.push(String(c_argv[i]));
+    }
+}
+
+}  // namespace typoly_std_builtin
+
+// Export console namespace at module level for console::log syntax
+export namespace console {
+    using typoly_std_console::log;
+    using typoly_std_console::info;
+    using typoly_std_console::warn;
+    using typoly_std_console::error;
+    using typoly_std_console::debug;
+}
+
+// Export Math namespace at module level for Math::abs syntax
+export namespace Math {
+    using typoly_std_math::PI;
+    using typoly_std_math::E;
+    using typoly_std_math::LN2;
+    using typoly_std_math::LN10;
+    using typoly_std_math::LOG2E;
+    using typoly_std_math::LOG10E;
+    using typoly_std_math::SQRT2;
+    using typoly_std_math::abs;
+    using typoly_std_math::floor;
+    using typoly_std_math::ceil;
+    using typoly_std_math::round;
+    using typoly_std_math::trunc;
+    using typoly_std_math::min;
+    using typoly_std_math::max;
+    using typoly_std_math::pow;
+    using typoly_std_math::sqrt;
+    using typoly_std_math::cbrt;
+    using typoly_std_math::exp;
+    using typoly_std_math::log;
+    using typoly_std_math::log2;
+    using typoly_std_math::log10;
+    using typoly_std_math::sin;
+    using typoly_std_math::cos;
+    using typoly_std_math::tan;
+    using typoly_std_math::asin;
+    using typoly_std_math::acos;
+    using typoly_std_math::atan;
+    using typoly_std_math::atan2;
+    using typoly_std_math::sinh;
+    using typoly_std_math::cosh;
+    using typoly_std_math::tanh;
+    using typoly_std_math::random;
+    using typoly_std_math::sign;
+    using typoly_std_math::hypot;
+}

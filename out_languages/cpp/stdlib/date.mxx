@@ -1,0 +1,277 @@
+module;  // Global module fragment
+
+#include <chrono>
+#include <string>
+#include <ctime>
+#include <sstream>
+#include <iomanip>
+
+export module typoly_std_date;
+
+import typoly_std_builtin_basic_types;
+
+export namespace typoly_std_date {
+
+using namespace typoly_std_builtin_basic_types;
+
+class Date {
+public:
+    using time_point = std::chrono::system_clock::time_point;
+    
+    time_point tp;
+    
+    // Default constructor - current time
+    Date() : tp(std::chrono::system_clock::now()) {}
+    
+    // From milliseconds since epoch
+    Date(int64_t ms) : tp(std::chrono::system_clock::from_time_t(0) + 
+                          std::chrono::milliseconds(ms)) {}
+    
+    // From components
+    Date(int year, int month, int day, int hours = 0, int minutes = 0, 
+         int seconds = 0, int milliseconds = 0) {
+        std::tm tm = {};
+        tm.tm_year = year - 1900;
+        tm.tm_mon = month;
+        tm.tm_mday = day;
+        tm.tm_hour = hours;
+        tm.tm_min = minutes;
+        tm.tm_sec = seconds;
+        time_t t = std::mktime(&tm);
+        tp = std::chrono::system_clock::from_time_t(t) + 
+             std::chrono::milliseconds(milliseconds);
+    }
+    
+    // From ISO string
+    static Date parse(const String& str) {
+        std::tm tm = {};
+        std::istringstream ss(str.value);
+        ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%S");
+        return Date(std::mktime(&tm) * 1000LL);
+    }
+    
+    // Get components
+    int getFullYear() const { return toTm().tm_year + 1900; }
+    int getMonth() const { return toTm().tm_mon; }
+    int getDate() const { return toTm().tm_mday; }
+    int getDay() const { return toTm().tm_wday; }
+    int getHours() const { return toTm().tm_hour; }
+    int getMinutes() const { return toTm().tm_min; }
+    int getSeconds() const { return toTm().tm_sec; }
+    int getMilliseconds() const {
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            tp.time_since_epoch()).count();
+        return ms % 1000;
+    }
+    
+    int64_t getTime() const {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+            tp.time_since_epoch()).count();
+    }
+    
+    int64_t valueOf() const { return getTime(); }
+    
+    // UTC versions
+    int getUTCFullYear() const { return toUTCTm().tm_year + 1900; }
+    int getUTCMonth() const { return toUTCTm().tm_mon; }
+    int getUTCDate() const { return toUTCTm().tm_mday; }
+    int getUTCDay() const { return toUTCTm().tm_wday; }
+    int getUTCHours() const { return toUTCTm().tm_hour; }
+    int getUTCMinutes() const { return toUTCTm().tm_min; }
+    int getUTCSeconds() const { return toUTCTm().tm_sec; }
+    
+    // Set components
+    Date& setFullYear(int year) {
+        auto tm = toTm();
+        tm.tm_year = year - 1900;
+        tp = fromTm(tm);
+        return *this;
+    }
+    
+    Date& setMonth(int month) {
+        auto tm = toTm();
+        tm.tm_mon = month;
+        tp = fromTm(tm);
+        return *this;
+    }
+    
+    Date& setDate(int day) {
+        auto tm = toTm();
+        tm.tm_mday = day;
+        tp = fromTm(tm);
+        return *this;
+    }
+    
+    Date& setHours(int hours) {
+        auto tm = toTm();
+        tm.tm_hour = hours;
+        tp = fromTm(tm);
+        return *this;
+    }
+    
+    Date& setMinutes(int minutes) {
+        auto tm = toTm();
+        tm.tm_min = minutes;
+        tp = fromTm(tm);
+        return *this;
+    }
+    
+    Date& setSeconds(int seconds) {
+        auto tm = toTm();
+        tm.tm_sec = seconds;
+        tp = fromTm(tm);
+        return *this;
+    }
+    
+    Date& setMilliseconds(int ms) {
+        auto base = tp - std::chrono::milliseconds(getMilliseconds());
+        tp = base + std::chrono::milliseconds(ms);
+        return *this;
+    }
+    
+    Date& setMilliseconds(int64_t ms) {
+        tp = std::chrono::system_clock::from_time_t(0) + std::chrono::milliseconds(ms);
+        return *this;
+    }
+    
+    // String conversions
+    String toString() const {
+        std::ostringstream ss;
+        auto tm = toTm();
+        ss << std::put_time(&tm, "%a %b %d %Y %H:%M:%S GMT%z");
+        return String(ss.str());
+    }
+    
+    String toISOString() const {
+        std::ostringstream ss;
+        auto tm = toUTCTm();
+        ss << std::put_time(&tm, "%Y-%m-%dT%H:%M:%S.000Z");
+        return String(ss.str());
+    }
+    
+    String toDateString() const {
+        std::ostringstream ss;
+        auto tm = toTm();
+        ss << std::put_time(&tm, "%a %b %d %Y");
+        return String(ss.str());
+    }
+    
+    String toTimeString() const {
+        std::ostringstream ss;
+        auto tm = toTm();
+        ss << std::put_time(&tm, "%H:%M:%S GMT%z");
+        return String(ss.str());
+    }
+    
+    String toLocaleString() const {
+        return toString();
+    }
+    
+    String toLocaleDateString() const {
+        return toDateString();
+    }
+    
+    String toLocaleTimeString() const {
+        return toTimeString();
+    }
+    
+    String toUTCString() const {
+        std::ostringstream ss;
+        auto tm = toUTCTm();
+        ss << std::put_time(&tm, "%a, %d %b %Y %H:%M:%S GMT");
+        return String(ss.str());
+    }
+    
+    String toJSON() const {
+        return toISOString();
+    }
+    
+    // Comparisons
+    bool operator==(const Date& other) const { return tp == other.tp; }
+    bool operator!=(const Date& other) const { return tp != other.tp; }
+    bool operator<(const Date& other) const { return tp < other.tp; }
+    bool operator>(const Date& other) const { return tp > other.tp; }
+    bool operator<=(const Date& other) const { return tp <= other.tp; }
+    bool operator>=(const Date& other) const { return tp >= other.tp; }
+    
+    // Arithmetic
+    Date operator+(int64_t ms) const {
+        Date result;
+        result.tp = tp + std::chrono::milliseconds(ms);
+        return result;
+    }
+    
+    Date operator-(int64_t ms) const {
+        Date result;
+        result.tp = tp - std::chrono::milliseconds(ms);
+        return result;
+    }
+    
+    int64_t operator-(const Date& other) const {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+            tp - other.tp).count();
+    }
+    
+    Date& operator+=(int64_t ms) {
+        tp += std::chrono::milliseconds(ms);
+        return *this;
+    }
+    
+    Date& operator-=(int64_t ms) {
+        tp -= std::chrono::milliseconds(ms);
+        return *this;
+    }
+    
+    // Stream output
+    friend std::ostream& operator<<(std::ostream& os, const Date& d) {
+        return os << d.toString().value;
+    }
+    
+private:
+    std::tm toTm() const {
+        time_t t = std::chrono::system_clock::to_time_t(tp);
+        std::tm tm;
+#ifdef _WIN32
+        localtime_s(&tm, &t);
+#else
+        localtime_r(&t, &tm);
+#endif
+        return tm;
+    }
+    
+    std::tm toUTCTm() const {
+        time_t t = std::chrono::system_clock::to_time_t(tp);
+        std::tm tm;
+#ifdef _WIN32
+        gmtime_s(&tm, &t);
+#else
+        gmtime_r(&t, &tm);
+#endif
+        return tm;
+    }
+    
+    static time_point fromTm(const std::tm& tm) {
+        time_t t = std::mktime(const_cast<std::tm*>(&tm));
+        return std::chrono::system_clock::from_time_t(t);
+    }
+};
+
+// Global functions
+inline Date now() {
+    return Date();
+}
+
+inline int64_t getTime() {
+    return Date().getTime();
+}
+
+inline Date parseDate(const String& str) {
+    return Date::parse(str);
+}
+
+inline Date UTC(int year, int month, int day, int hours = 0, 
+                       int minutes = 0, int seconds = 0, int ms = 0) {
+    return Date(year, month, day, hours, minutes, seconds, ms);
+}
+
+}

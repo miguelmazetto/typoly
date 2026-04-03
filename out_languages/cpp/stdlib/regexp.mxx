@@ -1,0 +1,163 @@
+module;  // Global module fragment
+
+#include <regex>
+#include <string>
+#include <vector>
+#include <optional>
+
+export module typoly_std_regexp;
+
+import typoly_std_builtin_basic_types;
+
+export namespace typoly_std_regexp {
+
+using namespace typoly_std_builtin_basic_types;
+
+// Match result type
+struct MatchResult {
+    String value;
+    size_t index;
+    Vector<String> groups;
+    
+    // Boolean conversion
+    operator bool() const { return !value.empty(); }
+    
+    // Index access for groups
+    String operator[](size_t i) const {
+        if (i == 0) return value;
+        if (i - 1 < groups.length()) return groups[i - 1];
+        return String("");
+    }
+    
+    size_t length() const { return groups.length() + 1; }
+};
+
+// RegExp class
+class RegExp {
+public:
+    std::regex pattern;
+    String source;
+    bool global;
+    bool ignoreCase;
+    bool multiline;
+    bool sticky;
+    bool unicode;
+    bool dotAll;
+    
+    RegExp(const String& pattern, const String& flags = String(""))
+        : source(pattern), global(false), ignoreCase(false), multiline(false),
+          sticky(false), unicode(false), dotAll(false) {
+        
+        std::regex_constants::syntax_option_type options = std::regex::ECMAScript;
+        
+        for (size_t i = 0; i < flags.length(); i++) {
+            switch (flags[i]) {
+                case 'g': global = true; break;
+                case 'i': ignoreCase = true; options |= std::regex::icase; break;
+                case 'm': multiline = true; break;
+                case 's': dotAll = true; break;
+                case 'u': unicode = true; break;
+                case 'y': sticky = true; break;
+            }
+        }
+        
+        this->pattern = std::regex(pattern.value, options);
+    }
+    
+    // Test if pattern matches
+    bool test(const String& str) const {
+        return std::regex_search(str.value, pattern);
+    }
+    
+    // Execute and get first match
+    MatchResult exec(const String& str) const {
+        std::smatch match;
+        if (std::regex_search(str.value, match, pattern)) {
+            MatchResult result;
+            result.value = String(match.str());
+            result.index = match.position();
+            for (size_t i = 1; i < match.size(); i++) {
+                result.groups.push(String(match[i].str()));
+            }
+            return result;
+        }
+        // Return empty MatchResult if no match
+        MatchResult empty;
+        return empty;
+    }
+    
+    // Find all matches
+    Vector<MatchResult> matchAll(const String& str) const {
+        Vector<MatchResult> results;
+        auto it = std::sregex_iterator(str.value.begin(), str.value.end(), pattern);
+        auto end = std::sregex_iterator();
+        
+        for (; it != end; ++it) {
+            MatchResult result;
+            result.value = String(it->str());
+            result.index = it->position();
+            for (size_t i = 1; i < it->size(); i++) {
+                result.groups.push(String((*it)[i].str()));
+            }
+            results.push(result);
+        }
+        return results;
+    }
+    
+    // Search and return index
+    size_t search(const String& str) const {
+        std::smatch match;
+        if (std::regex_search(str.value, match, pattern)) {
+            return match.position();
+        }
+        return std::string::npos;
+    }
+    
+    // Replace first match (or all if global)
+    String replace(const String& str, const String& replacement) const {
+        if (global) {
+            return String(std::regex_replace(str.value, pattern, replacement.value));
+        }
+        
+        std::string result = str.value;
+        std::smatch match;
+        if (std::regex_search(result, match, pattern)) {
+            result.replace(match.position(), match.length(), replacement.value);
+        }
+        return String(result);
+    }
+    
+    // Split string by pattern
+    Vector<String> split(const String& str, size_t limit = std::string::npos) const {
+        Vector<String> result;
+        auto it = std::sregex_token_iterator(str.value.begin(), str.value.end(), pattern, -1);
+        auto end = std::sregex_token_iterator();
+        
+        size_t count = 0;
+        for (; it != end && count < limit; ++it, ++count) {
+            result.push(String(it->str()));
+        }
+        return result;
+    }
+    
+    size_t lastIndex() const { return 0; }
+};
+
+// Global functions that work on strings
+inline bool match(const String& str, const RegExp& pattern) {
+    return pattern.test(str);
+}
+
+inline std::optional<MatchResult> matchResult(const String& str, const RegExp& pattern) {
+    return pattern.exec(str);
+}
+
+inline String replace(const String& str, const RegExp& pattern, const String& replacement) {
+    return pattern.replace(str, replacement);
+}
+
+inline Vector<String> split(const String& str, const RegExp& pattern, size_t limit = std::string::npos) {
+    return pattern.split(str, limit);
+}
+
+}

@@ -1,0 +1,110 @@
+module;  // Global module fragment
+
+#include <cstddef>
+#include <stdexcept>
+#include <type_traits>
+#include <tuple>
+#include <utility>
+#include <memory>
+#include <cstring>
+#include <variant>
+
+export module typoly_std_union;
+
+export namespace typoly_std_union {
+
+// Forward declaration
+template <typename...> class Union;
+
+// Helper to check if type is in the union (exact match)
+template <typename T, typename... Ts>
+struct IsInUnion : std::false_type {};
+
+template <typename T, typename First, typename... Rest>
+struct IsInUnion<T, First, Rest...> : std::conditional_t<
+    std::is_same_v<std::decay_t<T>, std::decay_t<First>>,
+    std::true_type,
+    IsInUnion<T, Rest...>
+> {};
+
+// Helper to find index of type
+template <typename T, typename... Ts>
+struct IndexOf;
+
+template <typename T, typename... Rest>
+struct IndexOf<T, T, Rest...> {
+    static constexpr std::size_t value = 0;
+};
+
+template <typename T, typename U, typename... Rest>
+struct IndexOf<T, U, Rest...> {
+    static constexpr std::size_t value = 1 + IndexOf<T, Rest...>::value;
+};
+
+template <typename T>
+struct IndexOf<T> {
+    static constexpr std::size_t value = static_cast<std::size_t>(-1);
+};
+
+// The Union implementation - wraps std::variant
+template <typename... Ts>
+class Union {
+private:
+    std::variant<Ts...> var_;
+
+public:
+    Union() : var_() {}
+
+    // Single template constructor that handles both exact and convertible types
+    template <typename T, typename = std::enable_if_t<
+        !std::is_same_v<std::decay_t<T>, Union> &&
+        std::is_constructible_v<std::variant<Ts...>, T>
+    >>
+    Union(T&& value) : var_(std::forward<T>(value)) {}
+
+    Union(const Union& other) = default;
+    Union(Union&& other) noexcept = default;
+    Union& operator=(const Union& other) = default;
+    Union& operator=(Union&& other) noexcept = default;
+
+    // Assignment operator
+    template <typename T, typename = std::enable_if_t<
+        !std::is_same_v<std::decay_t<T>, Union> &&
+        std::is_assignable_v<std::variant<Ts...>&, T>
+    >>
+    Union& operator=(T&& value) {
+        var_ = std::forward<T>(value);
+        return *this;
+    }
+
+    ~Union() = default;
+
+    template <typename T>
+    T& as() {
+        return std::get<T>(var_);
+    }
+
+    template <typename T>
+    const T& as() const {
+        return std::get<T>(var_);
+    }
+
+    template <typename T>
+    bool holds() const {
+        return std::holds_alternative<T>(var_);
+    }
+
+    std::size_t index() const { return var_.index(); }
+    
+    bool empty() const { return var_.index() == std::variant_npos; }
+    
+    // Stream output operator
+    friend std::ostream& operator<<(std::ostream& os, const Union& u) {
+        std::visit([&os](const auto& val) {
+            os << val;
+        }, u.var_);
+        return os;
+    }
+};
+
+}  // namespace typoly_std_union

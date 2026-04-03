@@ -1,0 +1,284 @@
+module;  // Global module fragment
+
+#include <string>
+#include <vector>
+#include <cstdlib>
+#include <filesystem>
+#include <chrono>
+#include <thread>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <processenv.h>
+#else
+#include <unistd.h>
+#include <sys/utsname.h>
+#include <pwd.h>
+#endif
+
+export module typoly_std_os;
+
+import typoly_std_builtin_basic_types;
+
+export namespace typoly_std_os {
+
+using namespace typoly_std_builtin_basic_types;
+
+namespace os_impl = std::filesystem;
+
+// EOL - End of line character
+#ifdef _WIN32
+constexpr const char* EOL = "\r\n";
+#else
+constexpr const char* EOL = "\n";
+#endif
+
+// arch() - Returns the operating system CPU architecture
+inline String arch() {
+#ifdef _WIN32
+    #if defined(_M_X64) || defined(__x86_64__)
+        return String("x64");
+    #elif defined(_M_ARM64) || defined(__aarch64__)
+        return String("arm64");
+    #else
+        return String("x86");
+    #endif
+#else
+    #if defined(__x86_64__)
+        return String("x64");
+    #elif defined(__aarch64__)
+        return String("arm64");
+    #elif defined(__i386__)
+        return String("x86");
+    #else
+        return String("unknown");
+    #endif
+#endif
+}
+
+// cpus() - Returns an array of objects containing information about each CPU/core
+inline int cpus() {
+    return static_cast<int>(std::thread::hardware_concurrency());
+}
+
+// endianness() - Returns the endianness of the CPU
+inline String endianness() {
+    union {
+        uint32_t i;
+        char c[4];
+    } test = {0x01020304};
+    
+    if (test.c[0] == 1) {
+        return String("BE");
+    } else {
+        return String("LE");
+    }
+}
+
+// freemem() - Returns the amount of free system memory in bytes
+inline int64_t freemem() {
+#ifdef _WIN32
+    MEMORYSTATUSEX statex;
+    statex.dwLength = sizeof(statex);
+    GlobalMemoryStatusEx(&statex);
+    return static_cast<int64_t>(statex.ullAvailPhys);
+#else
+    // Use sysconf for Linux/Unix
+    long pages = sysconf(_SC_AVPHYS_PAGES);
+    long page_size = sysconf(_SC_PAGESIZE);
+    return static_cast<int64_t>(pages) * static_cast<int64_t>(page_size);
+#endif
+}
+
+// homedir() - Returns the home directory of the current user
+inline String homedir() {
+#ifdef _WIN32
+    char* home = nullptr;
+    size_t len = 0;
+    _dupenv_s(&home, &len, "USERPROFILE");
+    if (home) {
+        String result(home);
+        free(home);
+        return result;
+    }
+    return String("C:\\Users\\Default");
+#else
+    const char* home = std::getenv("HOME");
+    if (home) {
+        return String(home);
+    }
+    struct passwd* pw = getpwuid(getuid());
+    if (pw) {
+        return String(pw->pw_dir);
+    }
+    return String("/tmp");
+#endif
+}
+
+// hostname() - Returns the hostname of the operating system
+inline String hostname() {
+#ifdef _WIN32
+    char buffer[MAX_COMPUTERNAME_LENGTH + 1];
+    DWORD size = sizeof(buffer);
+    GetComputerNameA(buffer, &size);
+    return String(buffer);
+#else
+    char buffer[256];
+    gethostname(buffer, sizeof(buffer));
+    return String(buffer);
+#endif
+}
+
+// loadavg() - Returns an array containing the 1, 5, and 15 minute load averages
+// Note: Not available on Windows, returns [0, 0, 0]
+inline Vector<double> loadavg() {
+    Vector<double> result;
+#ifdef _WIN32
+    result.push(0.0);
+    result.push(0.0);
+    result.push(0.0);
+#else
+    double load[3];
+    if (getloadavg(load, 3) == 3) {
+        result.push(load[0]);
+        result.push(load[1]);
+        result.push(load[2]);
+    } else {
+        result.push(0.0);
+        result.push(0.0);
+        result.push(0.0);
+    }
+#endif
+    return result;
+}
+
+// networkInterfaces() - Returns an object containing network interfaces
+// Simplified version - just returns whether we have network
+inline bool hasNetwork() {
+    // Simplified check
+    return true;
+}
+
+// platform() - Returns a string identifying the operating system platform
+inline String platform() {
+#ifdef _WIN32
+    return String("win32");
+#elif __APPLE__
+    return String("darwin");
+#elif __linux__
+    return String("linux");
+#elif __FreeBSD__
+    return String("freebsd");
+#else
+    return String("unknown");
+#endif
+}
+
+// release() - Returns the operating system release
+inline String release() {
+#ifdef _WIN32
+    OSVERSIONINFOEX info;
+    ZeroMemory(&info, sizeof(OSVERSIONINFOEX));
+    info.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+    GetVersionEx((OSVERSIONINFO*)&info);
+    return String(std::to_string(info.dwMajorVersion) + "." + 
+                  std::to_string(info.dwMinorVersion) + "." + 
+                  std::to_string(info.dwBuildNumber));
+#else
+    struct utsname buffer;
+    if (uname(&buffer) == 0) {
+        return String(buffer.release);
+    }
+    return String("unknown");
+#endif
+}
+
+// tmpdir() - Returns the operating system's default directory for temporary files
+inline String tmpdir() {
+#ifdef _WIN32
+    char buffer[MAX_PATH];
+    GetTempPathA(MAX_PATH, buffer);
+    return String(buffer);
+#else
+    const char* tmp = std::getenv("TMPDIR");
+    if (tmp) return String(tmp);
+    tmp = std::getenv("TMP");
+    if (tmp) return String(tmp);
+    tmp = std::getenv("TEMP");
+    if (tmp) return String(tmp);
+    return String("/tmp");
+#endif
+}
+
+// totalmem() - Returns the total amount of system memory in bytes
+inline int64_t totalmem() {
+#ifdef _WIN32
+    MEMORYSTATUSEX statex;
+    statex.dwLength = sizeof(statex);
+    GlobalMemoryStatusEx(&statex);
+    return static_cast<int64_t>(statex.ullTotalPhys);
+#else
+    long pages = sysconf(_SC_PHYS_PAGES);
+    long page_size = sysconf(_SC_PAGESIZE);
+    return static_cast<int64_t>(pages) * static_cast<int64_t>(page_size);
+#endif
+}
+
+// type() - Returns the operating system name
+inline String type() {
+#ifdef _WIN32
+    return String("Windows_NT");
+#elif __APPLE__
+    return String("Darwin");
+#elif __linux__
+    return String("Linux");
+#elif __FreeBSD__
+    return String("FreeBSD");
+#else
+    return String("Unknown");
+#endif
+}
+
+// userInfo(options?) - Returns information about the current user
+inline String userInfo() {
+#ifdef _WIN32
+    char username[256];
+    DWORD size = sizeof(username);
+    GetUserNameA(username, &size);
+    return String(username);
+#else
+    struct passwd* pw = getpwuid(getuid());
+    if (pw) {
+        return String(pw->pw_name);
+    }
+    return String("unknown");
+#endif
+}
+
+// version() - Returns the operating system version
+inline String version() {
+#ifdef _WIN32
+    OSVERSIONINFOEX info;
+    ZeroMemory(&info, sizeof(OSVERSIONINFOEX));
+    info.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+    GetVersionEx((OSVERSIONINFO*)&info);
+    return String(std::to_string(info.dwMajorVersion) + "." + 
+                  std::to_string(info.dwMinorVersion));
+#else
+    struct utsname buffer;
+    if (uname(&buffer) == 0) {
+        return String(buffer.version);
+    }
+    return String("unknown");
+#endif
+}
+
+// Constants
+inline String getConstant(const String& name) {
+    if (name.value == "EOL") return String(EOL);
+    if (name.value == "endianness") return endianness();
+    if (name.value == "tmpdir") return tmpdir();
+    return String("");
+}
+
+}

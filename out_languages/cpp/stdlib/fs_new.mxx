@@ -1,0 +1,367 @@
+module;
+
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <vector>
+#include <sstream>
+#include <optional>
+#include <stdexcept>
+#include <chrono>
+
+export module typoly_std_fs;
+
+import typoly_std_builtin_basic_types;
+
+export namespace typoly_std_fs {
+
+using namespace typoly_std_builtin_basic_types;
+
+// Options structures
+struct ReadFileOptions {
+    String encoding = String("utf8");
+};
+
+struct WriteFileOptions {
+    String encoding = String("utf8");
+    String flag = String("w");
+    int mode = 0666;
+};
+
+struct AppendFileOptions {
+    String encoding = String("utf8");
+    int mode = 0666;
+};
+
+struct MkdirOptions {
+    bool recursive = false;
+    int mode = 0777;
+};
+
+struct RmOptions {
+    bool recursive = false;
+    bool force = false;
+};
+
+// Helper to convert String to path
+inline std::filesystem::path toPath(const String& s) {
+    return std::filesystem::path(s.value);
+}
+
+inline std::filesystem::path toPath(const char* s) {
+    return std::filesystem::path(s);
+}
+
+// existsSync
+inline bool existsSync(const String& path) {
+    return std::filesystem::exists(toPath(path));
+}
+
+inline bool existsSync(const char* path) {
+    return std::filesystem::exists(toPath(path));
+}
+
+// readFileSync
+inline String readFileSync(const String& path) {
+    std::ifstream file(path.value);
+    if (!file.is_open()) {
+        throw std::runtime_error("ENOENT: no such file or directory, open '" + path.value + "'");
+    }
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    return String(buffer.str());
+}
+
+inline String readFileSync(const char* path) {
+    return readFileSync(String(path));
+}
+
+// readFileSync with encoding options
+inline String readFileSync(const String& path, const String& encoding) {
+    // For utf8 and ascii, return as string
+    if (encoding.value == "utf8" || encoding.value == "ascii") {
+        return readFileSync(path);
+    }
+    // For base64, hex, binary - return as string representation
+    return readFileSync(path);
+}
+
+// readFileSyncBase64 - returns base64-encoded string
+inline String readFileSyncBase64(const String& path) {
+    std::ifstream file(path.value, std::ios::binary);
+    if (!file.is_open()) {
+        throw std::runtime_error("ENOENT: no such file or directory, open '" + path.value + "'");
+    }
+    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    // Simple base64 encoding
+    static const char base64_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string result;
+    int i = 0;
+    unsigned char char_array_3[3];
+    unsigned char char_array_4[4];
+    for (char c : content) {
+        char_array_3[i++] = c;
+        if (i == 3) {
+            char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
+            char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
+            char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
+            char_array_4[3] = char_array_3[2] & 0x3f;
+            for (i = 0; i < 4; i++) result += base64_chars[char_array_4[i]];
+            i = 0;
+        }
+    }
+    if (i) {
+        for (int j = i; j < 3; j++) char_array_3[j] = '\0';
+        char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
+        char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
+        char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
+        for (int j = 0; j < i + 1; j++) result += base64_chars[char_array_4[j]];
+        while (i++ < 3) result += '=';
+    }
+    return String(result);
+}
+
+// readFileSyncHex - returns hex-encoded string
+inline String readFileSyncHex(const String& path) {
+    std::ifstream file(path.value, std::ios::binary);
+    if (!file.is_open()) {
+        throw std::runtime_error("ENOENT: no such file or directory, open '" + path.value + "'");
+    }
+    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    std::string result;
+    for (unsigned char c : content) {
+        char hex[3];
+        snprintf(hex, sizeof(hex), "%02x", c);
+        result += hex;
+    }
+    return String(result);
+}
+
+// readFileSyncBinary - returns binary data as Vector<double>
+inline Vector<double> readFileSyncBinary(const String& path) {
+    std::ifstream file(path.value, std::ios::binary);
+    if (!file.is_open()) {
+        throw std::runtime_error("ENOENT: no such file or directory, open '" + path.value + "'");
+    }
+    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    Vector<double> result;
+    for (unsigned char c : content) {
+        result.push(static_cast<double>(c));
+    }
+    return result;
+}
+
+// writeFileSync
+inline void writeFileSync(const String& path, const String& data) {
+    std::ofstream file(path.value);
+    if (!file.is_open()) {
+        throw std::runtime_error("ENOENT: no such file or directory, open '" + path.value + "'");
+    }
+    file << data.value;
+}
+
+inline void writeFileSync(const char* path, const char* data) {
+    writeFileSync(String(path), String(data));
+}
+
+inline void writeFileSync(const String& path, const char* data) {
+    writeFileSync(path, String(data));
+}
+
+inline void writeFileSync(const char* path, const String& data) {
+    writeFileSync(String(path), data);
+}
+
+// writeFileSync with encoding
+inline void writeFileSync(const String& path, const String& data, const String& encoding) {
+    if (encoding.value == "utf8" || encoding.value == "ascii") {
+        writeFileSync(path, data);
+    } else {
+        writeFileSync(path, data);
+    }
+}
+
+// writeFileSyncBase64 - decodes base64 and writes
+inline void writeFileSyncBase64(const String& path, const String& data) {
+    static const std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string result;
+    int i = 0;
+    unsigned char char_array_4[4], char_array_3[3];
+    for (char c : data.value) {
+        if (c == '=') break;
+        auto pos = base64_chars.find(c);
+        if (pos == std::string::npos) continue;
+        char_array_4[i++] = pos;
+        if (i == 4) {
+            char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+            char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+            char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+            for (i = 0; i < 3; i++) result += char_array_3[i];
+            i = 0;
+        }
+    }
+    if (i) {
+        for (int j = i; j < 4; j++) char_array_4[j] = 0;
+        char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+        char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+        char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+        for (int j = 0; j < i - 1; j++) result += char_array_3[j];
+    }
+    std::ofstream file(path.value);
+    if (!file.is_open()) {
+        throw std::runtime_error("ENOENT: no such file or directory, open '" + path.value + "'");
+    }
+    file << result;
+}
+
+// writeFileSyncHex - decodes hex and writes
+inline void writeFileSyncHex(const String& path, const String& data) {
+    std::string result;
+    for (size_t i = 0; i + 1 < data.value.length(); i += 2) {
+        unsigned int byte;
+        std::istringstream(data.value.substr(i, 2)) >> std::hex >> byte;
+        result += static_cast<char>(byte);
+    }
+    std::ofstream file(path.value);
+    if (!file.is_open()) {
+        throw std::runtime_error("ENOENT: no such file or directory, open '" + path.value + "'");
+    }
+    file << result;
+}
+
+// writeFileSyncBinary - writes binary data from Vector<double>
+inline void writeFileSyncBinary(const String& path, const Vector<double>& data) {
+    std::ofstream file(path.value, std::ios::binary);
+    if (!file.is_open()) {
+        throw std::runtime_error("ENOENT: no such file or directory, open '" + path.value + "'");
+    }
+    for (size_t i = 0; i < data.length(); i++) {
+        char c = static_cast<char>(data[i]);
+        file.write(&c, 1);
+    }
+}
+
+// accessSync - Check file permissions
+inline void accessSync(const String^& path, int mode = 0) {
+    auto p = toPath(path);
+    if (!std::filesystem::exists(p)) {
+        throw std::runtime_error(\
+ENOENT:
+no
+such
+file
+or
+directory
+access
+\" + path.value + \"
+\);
+    }
+}
+
+// chmodSync
+inline void chmodSync(const String^& path, int mode) {
+    auto p = toPath(path);
+    if (!std::filesystem::exists(p)) {
+        throw std::runtime_error(\
+ENOENT:
+no
+such
+file
+or
+directory
+chmod
+\" + path.value + \"
+\);
+    }
+}
+
+// realpathSync
+inline String realpathSync(const String^& path) {
+    auto p = std::filesystem::canonical(toPath(path));
+    return String(p.string());
+}
+
+// lstatSync
+inline Stats lstatSync(const String^& path) {
+    auto p = toPath(path);
+    if (!std::filesystem::exists(p)) {
+        throw std::runtime_error(\
+ENOENT:
+no
+such
+file
+or
+directory
+lstat
+\" + path.value + \"
+\);
+    }
+    return statSync(path);
+}
+
+// renameSync
+inline void renameSync(const String^& oldPath, const String^& newPath) {
+    std::filesystem::rename(toPath(oldPath), toPath(newPath));
+}
+
+inline void renameSync(const char* oldPath, const char* newPath) {
+    renameSync(String(oldPath), String(newPath));
+}
+
+// copyFileSync
+inline void copyFileSync(const String^& src, const String^& dest) {
+    std::filesystem::copy_file(toPath(src), toPath(dest), std::filesystem::copy_options::overwrite_existing);
+}
+
+inline void copyFileSync(const char* src, const char* dest) {
+    copyFileSync(String(src), String(dest));
+}
+
+// truncateSync
+inline void truncateSync(const String^& path, int64_t len = 0) {
+    auto p = toPath(path);
+    std::filesystem::resize_file(p, static_cast<std::uintmax_t>(len));
+}
+
+inline void truncateSync(const char* path, int64_t len = 0) {
+    truncateSync(String(path), len);
+}
+
+// unlinkSync
+inline void unlinkSync(const String^& path) {
+    std::filesystem::remove(toPath(path));
+}
+
+inline void unlinkSync(const char* path) {
+    unlinkSync(String(path));
+}
+
+// createReadStream - simplified
+inline Vector<double> createReadStream(const String^& path) {
+    return readFileSyncBinary(path);
+}
+
+// createWriteStream - simplified
+inline void createWriteStream(const String^& path, const Vector<double>^& data) {
+    writeFileSyncBinary(path, data);
+}
+
+// readFileSync with Buffer return
+inline Vector<double> readFileSyncBuffer(const String^& path) {
+    return readFileSyncBinary(path);
+}
+
+inline Vector<double> readFileSyncBuffer(const char* path) {
+    return readFileSyncBinary(String(path));
+}
+
+// writeFileSync with Buffer
+inline void writeFileSyncBuffer(const String^& path, const Vector<double>^& data) {
+    writeFileSyncBinary(path, data);
+}
+
+inline void writeFileSyncBuffer(const char* path, const Vector<double>^& data) {
+    writeFileSyncBinary(String(path), data);
+}
+
+}

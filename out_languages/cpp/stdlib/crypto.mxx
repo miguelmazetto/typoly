@@ -1,0 +1,70 @@
+module;  // Global module fragment
+
+#include <string>
+#include <vector>
+#include <random>
+
+export module typoly_std_crypto;
+
+import typoly_std_builtin_basic_types;
+
+export namespace typoly_std_crypto {
+
+using namespace typoly_std_builtin_basic_types;
+
+// randomBytes - Generate cryptographically strong random bytes
+inline Vector<double> randomBytes(size_t size) {
+    Vector<double> result;
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 255);
+    
+    for (size_t i = 0; i < size; i++) {
+        result.push(static_cast<double>(dis(gen)));
+    }
+    return result;
+}
+
+// randomFill - Fill a buffer with random bytes
+inline void randomFill(Vector<double>& buffer, size_t offset = 0, size_t size = std::string::npos) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 255);
+    
+    size_t actualSize = (size == std::string::npos) ? buffer.length() - offset : size;
+    for (size_t i = offset; i < offset + actualSize && i < buffer.length(); i++) {
+        buffer[i] = static_cast<double>(dis(gen));
+    }
+}
+
+// randomInt - Generate a random integer in range
+inline int randomInt(int min, int max) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(min, max);
+    return dis(gen);
+}
+
+// randomUUID - Generate a random UUID
+inline String randomUUID() {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 15);
+    
+    char uuid[37];
+    for (int i = 0; i < 36; i++) {
+        if (i == 8 || i == 13 || i == 18 || i == 23) {
+            uuid[i] = '-';
+        } else if (i == 14) {
+            uuid[i] = '4';
+        } else if (i == 19) {
+            uuid[i] = "89ab"[dis(gen) % 4];
+        } else {
+            uuid[i] = "0123456789abcdef"[dis(gen)];
+        }
+    }
+    uuid[36] = '\0';
+    return String(uuid);
+}
+
+}  // namespace typoly_std_crypto

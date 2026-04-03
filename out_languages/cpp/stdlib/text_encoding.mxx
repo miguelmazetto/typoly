@@ -1,0 +1,82 @@
+module;  // Global module fragment
+
+#include <string>
+#include <vector>
+#include <cstdint>
+
+export module typoly_std_text_encoding;
+
+import typoly_std_builtin_basic_types;
+
+export namespace typoly_std_text_encoding {
+
+using namespace typoly_std_builtin_basic_types;
+
+// =====================================================================
+// TextEncoder - encodes strings to UTF-8 bytes
+// =====================================================================
+class TextEncoder {
+public:
+    String encoding = String("utf-8");
+    bool fatal = false;
+    bool ignoreBOM = false;
+    
+    TextEncoder() = default;
+    
+    // Encode string to Uint8Array-like Vector
+    Vector<double> encode(const String& input) const {
+        Vector<double> result;
+        for (size_t i = 0; i < input.value.length(); i++) {
+            unsigned char c = input.value[i];
+            if (c < 0x80) {
+                result.push(static_cast<double>(c));
+            } else if (c < 0xC0) {
+                result.push(static_cast<double>(c));
+            } else {
+                // Simple UTF-8 encoding for extended ASCII
+                result.push(static_cast<double>(c));
+            }
+        }
+        return result;
+    }
+    
+    // EncodeInto
+    struct EncodeIntoResult {
+        size_t read;
+        size_t written;
+    };
+    
+    EncodeIntoResult encodeInto(const String& source, Vector<double>& destination) const {
+        size_t written = 0;
+        for (size_t i = 0; i < source.value.length() && written < destination.length(); i++) {
+            destination[written] = static_cast<double>(source.value[i]);
+            written++;
+        }
+        return { source.value.length(), written };
+    }
+};
+
+// =====================================================================
+// TextDecoder - decodes UTF-8 bytes to strings
+// =====================================================================
+class TextDecoder {
+public:
+    String encoding = String("utf-8");
+    bool fatal = false;
+    bool ignoreBOM = false;
+    
+    TextDecoder() = default;
+    TextDecoder(const String& label) : encoding(label) {}
+    TextDecoder(const String& label, bool fatal) : encoding(label), fatal(fatal) {}
+    
+    // Decode bytes to string
+    String decode(const Vector<double>& input) const {
+        std::string result;
+        for (size_t i = 0; i < input.length(); i++) {
+            result += static_cast<char>(input[i]);
+        }
+        return String(result);
+    }
+};
+
+}  // namespace typoly_std_text_encoding

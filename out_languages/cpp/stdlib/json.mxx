@@ -1,0 +1,319 @@
+module;  // Global module fragment
+
+#include <string>
+#include <vector>
+#include <map>
+#include <variant>
+#include <sstream>
+#include <stdexcept>
+
+export module typoly_std_json;
+
+import typoly_std_builtin_basic_types;
+
+export namespace typoly_std_json {
+
+using namespace typoly_std_builtin_basic_types;
+
+// Forward declarations
+class JSON;
+
+using JSONObject = std::map<String, JSON>;
+using JSONArray = std::vector<JSON>;
+
+class JSON {
+public:
+    using value_type = std::variant<
+        std::nullptr_t,    // null
+        bool,              // boolean
+        double,            // number
+        String,            // string
+        JSONArray,         // array
+        JSONObject         // object
+    >;
+    
+    value_type value;
+    
+    JSON() : value(nullptr) {}
+    JSON(std::nullptr_t) : value(nullptr) {}
+    JSON(bool v) : value(v) {}
+    JSON(int v) : value(static_cast<double>(v)) {}
+    JSON(double v) : value(v) {}
+    JSON(const char* v) : value(String(v)) {}
+    JSON(const String& v) : value(v) {}
+    JSON(const JSONArray& v) : value(v) {}
+    JSON(const JSONObject& v) : value(v) {}
+    
+    // Type checks
+    bool isNull() const { return std::holds_alternative<std::nullptr_t>(value); }
+    bool isBool() const { return std::holds_alternative<bool>(value); }
+    bool isNumber() const { return std::holds_alternative<double>(value); }
+    bool isString() const { return std::holds_alternative<String>(value); }
+    bool isArray() const { return std::holds_alternative<JSONArray>(value); }
+    bool isObject() const { return std::holds_alternative<JSONObject>(value); }
+    
+    // Getters
+    bool asBool() const { return std::get<bool>(value); }
+    double asNumber() const { return std::get<double>(value); }
+    const String& asString() const { return std::get<String>(value); }
+    String& asString() { return std::get<String>(value); }
+    JSONArray& asArray() { return std::get<JSONArray>(value); }
+    const JSONArray& asArray() const { return std::get<JSONArray>(value); }
+    JSONObject& asObject() { return std::get<JSONObject>(value); }
+    const JSONObject& asObject() const { return std::get<JSONObject>(value); }
+    
+    // Array access
+    JSON& operator[](size_t index) {
+        if (!isArray()) value = JSONArray();
+        auto& arr = std::get<JSONArray>(value);
+        if (index >= arr.size()) arr.resize(index + 1);
+        return arr[index];
+    }
+    
+    const JSON& operator[](size_t index) const {
+        return std::get<JSONArray>(value)[index];
+    }
+    
+    // Object access
+    JSON& operator[](const String& key) {
+        if (!isObject()) value = JSONObject();
+        return std::get<JSONObject>(value)[key];
+    }
+    
+    const JSON& operator[](const String& key) const {
+        return std::get<JSONObject>(value).at(key);
+    }
+    
+    JSON& operator[](const char* key) {
+        return (*this)[String(key)];
+    }
+    
+    const JSON& operator[](const char* key) const {
+        return (*this)[String(key)];
+    }
+    
+    // Array methods
+    void push(const JSON& item) {
+        if (!isArray()) value = JSONArray();
+        std::get<JSONArray>(value).push_back(item);
+    }
+    
+    JSON pop() {
+        auto& arr = std::get<JSONArray>(value);
+        JSON item = arr.back();
+        arr.pop_back();
+        return item;
+    }
+    
+    // Size
+    size_t length() const {
+        if (isArray()) return std::get<JSONArray>(value).size();
+        if (isString()) return std::get<String>(value).length();
+        if (isObject()) return std::get<JSONObject>(value).size();
+        return 0;
+    }
+    
+    size_t size() const { return length(); }
+    
+    // Object methods
+    bool has(const String& key) const {
+        if (!isObject()) return false;
+        return std::get<JSONObject>(value).find(key) != std::get<JSONObject>(value).end();
+    }
+    
+    bool delete_(const String& key) {
+        if (!isObject()) return false;
+        return std::get<JSONObject>(value).erase(key) > 0;
+    }
+    
+    // Conversion
+    operator bool() const {
+        if (isNull()) return false;
+        if (isBool()) return asBool();
+        if (isNumber()) return asNumber() != 0;
+        if (isString()) return !asString().empty();
+        return true;
+    }
+    
+    // Parse JSON string
+    static JSON parse(const String& str);
+    
+    // Stringify to JSON string
+    String stringify(int indent = -1) const;
+    
+    // Stream output
+    friend std::ostream& operator<<(std::ostream& os, const JSON& json) {
+        return os << json.stringify().value;
+    }
+};
+
+// Parse implementation
+inline JSON parseValue(const String& str, size_t& pos);
+
+inline void skipWhitespace(const String& str, size_t& pos) {
+    while (pos < str.length() && std::isspace(str[pos])) pos++;
+}
+
+inline String parseString(const String& str, size_t& pos) {
+    if (str[pos] != '"') throw std::runtime_error("Expected '\"'");
+    pos++;
+    std::string result;
+    while (pos < str.length() && str[pos] != '"') {
+        if (str[pos] == '\\') {
+            pos++;
+            switch (str[pos]) {
+                case '"': result += '"'; break;
+                case '\\': result += '\\'; break;
+                case '/': result += '/'; break;
+                case 'b': result += '\b'; break;
+                case 'f': result += '\f'; break;
+                case 'n': result += '\n'; break;
+                case 'r': result += '\r'; break;
+                case 't': result += '\t'; break;
+                default: result += str[pos];
+            }
+        } else {
+            result += str[pos];
+        }
+        pos++;
+    }
+    if (pos >= str.length()) throw std::runtime_error("Unterminated string");
+    pos++;
+    return String(result);
+}
+
+inline double parseNumber(const String& str, size_t& pos) {
+    size_t start = pos;
+    if (str[pos] == '-') pos++;
+    while (pos < str.length() && std::isdigit(str[pos])) pos++;
+    if (pos < str.length() && str[pos] == '.') {
+        pos++;
+        while (pos < str.length() && std::isdigit(str[pos])) pos++;
+    }
+    if (pos < str.length() && (str[pos] == 'e' || str[pos] == 'E')) {
+        pos++;
+        if (str[pos] == '+' || str[pos] == '-') pos++;
+        while (pos < str.length() && std::isdigit(str[pos])) pos++;
+    }
+    return std::stod(str.value.substr(start, pos - start));
+}
+
+inline JSONArray parseArray(const String& str, size_t& pos) {
+    if (str[pos] != '[') throw std::runtime_error("Expected '['");
+    pos++;
+    JSONArray result;
+    skipWhitespace(str, pos);
+    if (str[pos] == ']') { pos++; return result; }
+    while (true) {
+        result.push_back(parseValue(str, pos));
+        skipWhitespace(str, pos);
+        if (str[pos] == ']') { pos++; break; }
+        if (str[pos] != ',') throw std::runtime_error("Expected ','");
+        pos++;
+        skipWhitespace(str, pos);
+    }
+    return result;
+}
+
+inline JSONObject parseObject(const String& str, size_t& pos) {
+    if (str[pos] != '{') throw std::runtime_error("Expected '{'");
+    pos++;
+    JSONObject result;
+    skipWhitespace(str, pos);
+    if (str[pos] == '}') { pos++; return result; }
+    while (true) {
+        skipWhitespace(str, pos);
+        String key = parseString(str, pos);
+        skipWhitespace(str, pos);
+        if (str[pos] != ':') throw std::runtime_error("Expected ':'");
+        pos++;
+        skipWhitespace(str, pos);
+        result[key] = parseValue(str, pos);
+        skipWhitespace(str, pos);
+        if (str[pos] == '}') { pos++; break; }
+        if (str[pos] != ',') throw std::runtime_error("Expected ','");
+        pos++;
+    }
+    return result;
+}
+
+inline JSON parseValue(const String& str, size_t& pos) {
+    skipWhitespace(str, pos);
+    if (str[pos] == '"') return JSON(parseString(str, pos));
+    if (str[pos] == '[') return JSON(parseArray(str, pos));
+    if (str[pos] == '{') return JSON(parseObject(str, pos));
+    if (str[pos] == 't') { pos += 4; return JSON(true); }
+    if (str[pos] == 'f') { pos += 5; return JSON(false); }
+    if (str[pos] == 'n') { pos += 4; return JSON(nullptr); }
+    return JSON(parseNumber(str, pos));
+}
+
+inline JSON JSON::parse(const String& str) {
+    size_t pos = 0;
+    return parseValue(str, pos);
+}
+
+// Stringify implementation
+inline String JSON::stringify(int indent) const {
+    std::ostringstream oss;
+    
+    if (isNull()) {
+        oss << "null";
+    } else if (isBool()) {
+        oss << (asBool() ? "true" : "false");
+    } else if (isNumber()) {
+        double n = asNumber();
+        if (n == static_cast<int64_t>(n) && std::abs(n) < 1e15) {
+            oss << static_cast<int64_t>(n);
+        } else {
+            oss << n;
+        }
+    } else if (isString()) {
+        oss << '"';
+        for (size_t i = 0; i < asString().length(); i++) {
+            char c = asString()[i];
+            switch (c) {
+                case '"': oss << "\\\""; break;
+                case '\\': oss << "\\\\"; break;
+                case '\b': oss << "\\b"; break;
+                case '\f': oss << "\\f"; break;
+                case '\n': oss << "\\n"; break;
+                case '\r': oss << "\\r"; break;
+                case '\t': oss << "\\t"; break;
+                default: oss << c;
+            }
+        }
+        oss << '"';
+    } else if (isArray()) {
+        oss << '[';
+        const auto& arr = asArray();
+        for (size_t i = 0; i < arr.size(); i++) {
+            if (i > 0) oss << ',';
+            oss << arr[i].stringify().value;
+        }
+        oss << ']';
+    } else if (isObject()) {
+        oss << '{';
+        const auto& obj = asObject();
+        bool first = true;
+        for (const auto& [key, val] : obj) {
+            if (!first) oss << ',';
+            first = false;
+            oss << '"' << key.value << "\":" << val.stringify().value;
+        }
+        oss << '}';
+    }
+    
+    return String(oss.str());
+}
+
+// Global functions
+inline JSON parse(const String& str) {
+    return JSON::parse(str);
+}
+
+inline String stringify(const JSON& json) {
+    return json.stringify();
+}
+
+}

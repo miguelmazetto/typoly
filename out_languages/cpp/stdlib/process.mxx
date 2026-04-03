@@ -1,0 +1,225 @@
+module;  // Global module fragment
+
+#include <string>
+#include <vector>
+#include <cstdlib>
+#include <chrono>
+#include <filesystem>
+#include <iostream>
+#include <csignal>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <process.h>
+#include <psapi.h>
+#else
+#include <unistd.h>
+#include <sys/types.h>
+#include <fstream>
+#endif
+
+export module typoly_std_process;
+
+import typoly_std_builtin_basic_types;
+
+export namespace typoly_std_process {
+
+using namespace typoly_std_builtin_basic_types;
+
+// argv - A Vector containing the command-line arguments passed when the process was launched
+// This is populated by main() at startup
+inline Vector<String> argv;
+
+// Initialize argv from argc and argv (called from main)
+inline void initArgv(int argc, char* c_argv[]) {
+    for (int i = 0; i < argc; i++) {
+        argv.push(String(c_argv[i]));
+    }
+}
+
+// chdir(directory) - Changes the current working directory of the process
+inline void chdir(const String& directory) {
+    std::filesystem::current_path(directory.value);
+}
+
+// connected - True if the process is connected to a parent IPC process
+inline bool connected = false;
+
+// cwd() - Returns the current working directory of the process
+inline String cwd() {
+    return String(std::filesystem::current_path().string());
+}
+
+// disconnect() - Closes the IPC channel to the parent process
+inline void disconnect() {
+    connected = false;
+}
+
+// env - An object containing the user environment
+inline String getEnv(const String& name) {
+    const char* value = std::getenv(name.value.c_str());
+    if (value) {
+        return String(value);
+    }
+    return String("");
+}
+
+inline void setEnv(const String& name, const String& value) {
+#ifdef _WIN32
+    _putenv_s(name.value.c_str(), value.value.c_str());
+#else
+    setenv(name.value.c_str(), value.value.c_str(), 1);
+#endif
+}
+
+inline bool hasEnv(const String& name) {
+    return std::getenv(name.value.c_str()) != nullptr;
+}
+
+// exit([code]) - Ends the process
+inline void exit(int code = 0) {
+    std::exit(code);
+}
+
+// hrtime([time]) - Returns the current high-resolution real time
+inline int64_t hrtime() {
+    auto now = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        now.time_since_epoch()).count();
+}
+
+// kill(pid[, signal]) - Sends the signal to the process identified by pid
+inline bool kill(int pid, int signal = 15) {
+#ifdef _WIN32
+    HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+    if (hProcess) {
+        TerminateProcess(hProcess, signal);
+        CloseHandle(hProcess);
+        return true;
+    }
+    return false;
+#else
+    return ::kill(pid, signal) == 0;
+#endif
+}
+
+// memoryUsage() - Returns an object describing the memory usage
+struct MemoryUsage {
+    size_t rss = 0;
+    size_t heapTotal = 0;
+    size_t heapUsed = 0;
+    size_t external = 0;
+    size_t arrayBuffers = 0;
+};
+
+inline MemoryUsage memoryUsage() {
+    MemoryUsage usage;
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS pmc;
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc))) {
+        usage.rss = pmc.WorkingSetSize;
+        usage.heapTotal = pmc.PagefileUsage;
+        usage.heapUsed = pmc.WorkingSetSize;
+    }
+#endif
+    return usage;
+}
+
+// pid - The PID of the process
+inline int pid() {
+#ifdef _WIN32
+    return static_cast<int>(GetCurrentProcessId());
+#else
+    return static_cast<int>(getpid());
+#endif
+}
+
+// platform - A string identifying the operating system platform
+inline String platform() {
+#ifdef _WIN32
+    return String("win32");
+#elif __APPLE__
+    return String("darwin");
+#elif __linux__
+    return String("linux");
+#elif __FreeBSD__
+    return String("freebsd");
+#else
+    return String("unknown");
+#endif
+}
+
+// ppid - The PID of the parent process
+inline int ppid() {
+#ifdef _WIN32
+    return 0;
+#else
+    return static_cast<int>(getppid());
+#endif
+}
+
+// title - The current process title
+inline String title() {
+    return String("typoly");
+}
+
+// version - A string with the version
+inline String version() {
+    return String("1.0.0");
+}
+
+// abort() - Causes the process to exit immediately
+inline void abort() {
+    std::abort();
+}
+
+// arch - The operating system CPU architecture
+inline String arch() {
+#ifdef _WIN32
+    #if defined(_M_X64) || defined(__x86_64__)
+        return String("x64");
+    #elif defined(_M_ARM64) || defined(__aarch64__)
+        return String("arm64");
+    #else
+        return String("x86");
+    #endif
+#else
+    #if defined(__x86_64__)
+        return String("x64");
+    #elif defined(__aarch64__)
+        return String("arm64");
+    #elif defined(__i386__)
+        return String("x86");
+    #else
+        return String("unknown");
+    #endif
+#endif
+}
+
+// uptime - seconds since process start
+inline double uptime() {
+    static auto start = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+    return std::chrono::duration_cast<std::chrono::seconds>(now - start).count();
+}
+
+// nextTick - simplified (calls function immediately)
+template<typename Func>
+inline void nextTick(Func func) {
+    func();
+}
+
+// stdin/stdout/stderr (renamed to avoid conflict with C stdio)
+inline String stdin_() {
+    return String("");
+}
+
+inline void stdout_(const String& data) {
+    std::cout << data.value;
+}
+
+inline void stderr_(const String& data) {
+    std::cerr << data.value;
+}
+
+}  // namespace typoly_std_process

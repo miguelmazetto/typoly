@@ -1,0 +1,148 @@
+{
+  "version": "1.0.0",
+  "description": "Function overrides for Typoly C++ transpiler",
+  "functions": {
+    "fs.readFileSync": {
+      "description": "Read file synchronously with different return types based on encoding option",
+      "optionParameter": 1,
+      "optionName": "encoding",
+      "overloads": {
+        "utf8": {
+          "cppFunction": "readFileSync",
+          "returnType": "String",
+          "description": "Returns UTF-8 string"
+        },
+        "ascii": {
+          "cppFunction": "readFileSync",
+          "returnType": "String",
+          "description": "Returns ASCII string"
+        },
+        "base64": {
+          "cppFunction": "readFileSyncBase64",
+          "returnType": "String",
+          "description": "Returns base64-encoded string"
+        },
+        "hex": {
+          "cppFunction": "readFileSyncHex",
+          "returnType": "String",
+          "description": "Returns hex-encoded string"
+        },
+        "binary": {
+          "cppFunction": "readFileSyncBuffer",
+          "returnType": "Vector<double>",
+          "description": "Returns binary data as byte array"
+        }
+      },
+      "default": {
+        "cppFunction": "readFileSync",
+        "returnType": "String",
+        "description": "Returns UTF-8 string (default)"
+      }
+    },
+    "fs.writeFileSync": {
+      "description": "Write file synchronously with different input handling",
+      "optionParameter": 2,
+      "optionName": "encoding",
+      "overloads": {
+        "utf8": {
+          "cppFunction": "writeFileSync",
+          "description": "Write UTF-8 string"
+        },
+        "ascii": {
+          "cppFunction": "writeFileSync",
+          "description": "Write ASCII string"
+        },
+        "base64": {
+          "cppFunction": "writeFileSyncBase64",
+          "description": "Write base64-decoded data"
+        },
+        "hex": {
+          "cppFunction": "writeFileSyncHex",
+          "description": "Write hex-decoded data"
+        },
+        "binary": {
+          "cppFunction": "writeFileSyncBuffer",
+          "description": "Write binary data"
+        }
+      },
+      "default": {
+        "cppFunction": "writeFileSync",
+        "description": "Write UTF-8 string (default)"
+      }
+    },
+    "fs.appendFileSync": {
+      "description": "Append to file synchronously with different input handling",
+      "optionParameter": 2,
+      "optionName": "encoding",
+      "overloads": {
+        "utf8": {
+          "cppFunction": "appendFileSync",
+          "description": "Append UTF-8 string"
+        },
+        "ascii": {
+          "cppFunction": "appendFileSync",
+          "description": "Append ASCII string"
+        },
+        "binary": {
+          "cppFunction": "appendFileSyncBinary",
+          "description": "Append binary data"
+        }
+      },
+      "default": {
+        "cppFunction": "appendFileSync",
+        "description": "Append UTF-8 string (default)"
+      }
+    },
+    "JSON.parse": {
+      "description": "Parse JSON string with optional reviver function",
+      "overloads": {
+        "withReviver": {
+          "condition": {
+            "type": "parameterCount",
+            "value": 2
+          },
+          "cppFunction": "parseWithReviver",
+          "description": "Parse JSON with reviver function"
+        }
+      },
+      "default": {
+        "cppFunction": "parse",
+        "description": "Standard JSON parse"
+      }
+    },
+    "JSON.stringify": {
+      "description": "Stringify value to JSON with optional replacer and space",
+      "overloads": {
+        "withReplacerAndSpace": {
+          "condition": {
+            "type": "parameterCount",
+            "value": 3
+          },
+          "cppFunction": "stringifyFormatted",
+          "description": "Stringify with replacer and formatting"
+        },
+        "withReplacer": {
+          "condition": {
+            "type": "parameterCount",
+            "value": 2
+          },
+          "cppFunction": "stringifyWithReplacer",
+          "description": "Stringify with replacer function"
+        },
+        "withSpace": {
+          "condition": {
+            "type": "parameterCount",
+            "value": 2,
+            "secondParamType": "number"
+          },
+          "cppFunction": "stringifyFormatted",
+          "description": "Stringify with indentation"
+        }
+      },
+      "default": {
+        "cppFunction": "stringify",
+        "description": "Standard JSON stringify"
+      }
+    }
+  }
+}
