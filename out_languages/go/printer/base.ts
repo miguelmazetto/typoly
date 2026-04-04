@@ -1,9 +1,9 @@
-import { CPrinter } from "base_printer";
+import { RawTypescriptPrinter } from "base_printer";
 import * as ts from 'typescript';
 import type { SourceFile, Identifier, Node, TypeNode } from "typescript";
 import { loadFunctionOverrides, resolveFunctionOverride } from '../config/resolver';
 
-export class GoPrinterBase extends CPrinter {
+export class GoPrinterBase extends RawTypescriptPrinter {
     typeChecker: ts.TypeChecker | undefined;
     packageName: string = "main";
     currentModuleName: string = "";

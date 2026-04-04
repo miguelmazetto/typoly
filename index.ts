@@ -1,11 +1,11 @@
 import * as ts from 'typescript'
 import { CppPrinter } from './out_languages/cpp/printer'
 import { GoPrinter } from './out_languages/go/printer'
-import { CPrinter, emitFiles } from './generated/printer'
+import { RawTypescriptPrinter, emitFiles } from './out_languages/common/ts_printer'
 import { chdir, exit } from 'process'
 import { join, resolve, dirname, basename, relative } from 'path'
 import * as fs from 'fs'
-import type { EmitterExtraContext } from './core/emitter_extra'
+import type { EmitterExtraContext } from './out_languages/common/emitter_extra'
 
 // Parse command line arguments
 interface CliArgs {
@@ -118,7 +118,7 @@ function benchmark_func<T>(func: () => T): T{
     return r
 }
 
-function makeCreatePrinter(v: typeof CPrinter){
+function makeCreatePrinter(v: typeof RawTypescriptPrinter){
     return (extra: EmitterExtraContext, printerOptions: ts.PrinterOptions = {}, handlers: ts.PrintHandlers = {}): ts.Printer => {
         return new v(printerOptions, handlers, extra)
     }
@@ -351,7 +351,7 @@ if (!fs.existsSync(outLangDir)) {
 console.log(`Output directory: ${outLangDir}`);
 
 // Select printer based on language
-let PrinterClass: typeof CPrinter;
+let PrinterClass: typeof RawTypescriptPrinter;
 let fileExtension: string;
 let declExtension: string;
 

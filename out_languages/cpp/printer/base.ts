@@ -1,9 +1,9 @@
-import { CPrinter } from "base_printer";
+import { RawTypescriptPrinter } from "base_printer";
 import * as ts from 'typescript';
 import type { SourceFile, Identifier, Node, TypeNode } from "typescript";
 import { loadFunctionOverrides, resolveFunctionOverride, hasFunctionOverrides, extractOptionValue, getArgumentDataType } from '../config/resolver';
 
-export class CppPrinterBase extends CPrinter {
+export class CppPrinterBase extends RawTypescriptPrinter {
     typeChecker: ts.TypeChecker | undefined;
     packageName: string = "typoly";
     currentModuleName: string = "";

@@ -58,7 +58,7 @@ function factoryToClassTransformer<T extends ts.Node>(context: ts.Transformation
         if (ts.isFunctionDeclaration(node) && node.name &&
             (wl = transformer_whitelist[node.name.text]) !== undefined
         ) {
-            const className = 'C' + (node.name?.text.replace(/^create/, '') ?? 'UnnamedClass'+node.pos);
+            const className = 'RawTypescriptPrinter';
             let args: string[] = [];
             let ret: string | undefined;
             if(!wl){
@@ -81,28 +81,11 @@ function factoryToClassTransformer<T extends ts.Node>(context: ts.Transformation
                          : (args[i] = p.name.text, p)),
                     node.type,
                     factory.createBlock(wl ? [ // return class
-                        //factory.createReturnStatement(factory.createNewExpression(
-                        //    factory.createIdentifier(className),
-                        //    undefined,
-                        //    undefined // args.map(factory.createIdentifier)
-                        //))
                         factory.createReturnStatement(
-                            //factory.createCallExpression(
-                            //    factory.createPropertyAccessExpression(
-                            //      factory.createNewExpression(
-                            //        factory.createIdentifier(className),
-                            //        undefined,
-                            //        []
-                            //      ),
-                            //      factory.createIdentifier("__constructor")
-                            //    ),
-                            //    undefined,
-                            //    args.map(factory.createIdentifier)
-                            //)
                             factory.createNewExpression(
                                 factory.createIdentifier(className),
                                 undefined,
-                                args.map(factory.createIdentifier).concat(className==='CPrinter'?[factory.createIdentifier('extra')]:[])
+                                args.map(factory.createIdentifier).concat([factory.createIdentifier('extra')])
                               ),
                         )
                     ] : [ // return function
@@ -139,7 +122,7 @@ function factoryToClassTransformer<T extends ts.Node>(context: ts.Transformation
             ];
         } else if (ts.isVariableDeclaration(node) && node.initializer && ts.isFunctionExpression(node.initializer) &&
                    node.name && ts.isIdentifier(node.name) && node.name.text.startsWith('create')) {
-            const className = 'C' + (node.name?.text.replace(/^create/, '') ?? 'UnnamedClass'+node.pos);
+            const className = 'RawTypescriptPrinter';
             return transformFactoryVariableToClass(node, className);
         }
 
@@ -185,18 +168,6 @@ function addThisTransformer<T extends ts.Node>(context: ts.TransformationContext
 
 // Create constructor with parameters
 function createConstructor(node: ts.FunctionExpression | ts.FunctionDeclaration, constructorStatements: ts.Statement[]){
-    //return ts.factory.createConstructorDeclaration(
-    //    undefined,
-    //    node.parameters.map(p => ts.factory.createParameterDeclaration(
-    //        [ts.factory.createModifier(ts.SyntaxKind.PublicKeyword), ...(p.modifiers ?? [])],
-    //        p.dotDotDotToken,
-    //        p.name,
-    //        p.questionToken,
-    //        p.type,
-    //        p.initializer
-    //    )),
-    //    ts.factory.createBlock(constructorStatements, true)
-    //);
     return [
         // Add as properties
         ...node.parameters.map(p => factory.createPropertyDeclaration(
@@ -700,7 +671,7 @@ function patchFile(code: string, origpath: string, dstpath: string, patches?: Re
 }
 
 async function main(){
-    const path = join(dirname(__dirname), 'generated', 'printer.ts')
+    const path = join(dirname(dirname(__dirname)), 'out_languages', 'common', 'ts_printer.ts')
     const path_orig = path + '.orig'
     let content;
 
@@ -765,7 +736,7 @@ async function main(){
     }, transform, (code, f) => {
         code = code.replace('import * as ts from "./_namespaces/ts.js";',
             'import * as ts from "typescript";\n'+
-            'import { type EmitterExtraContext, typoly_getDeclarationEmitOutputFilePath, typoly_getOutputExtension } from "../core/emitter_extra"')
+            'import { type EmitterExtraContext, typoly_getDeclarationEmitOutputFilePath, typoly_getOutputExtension } from "./emitter_extra"')
         //code = code.replace('from "./_namespaces/ts.js";', 'from "typescript";')
         //code = code.replace(/import \{([^\}]+)\} from "\.\/_namespaces\/ts\.js"/, (v0, v1: string) => {
         //    let imports = v1.split(',').map(v=>v.trim())
@@ -784,5 +755,3 @@ async function main(){
     })
 }
 main()
-
-

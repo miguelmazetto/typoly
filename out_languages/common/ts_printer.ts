@@ -1,5 +1,5 @@
 import * as ts from "typescript";
-import { type EmitterExtraContext, typoly_getDeclarationEmitOutputFilePath, typoly_getOutputExtension } from "../core/emitter_extra"
+import { type EmitterExtraContext, typoly_getDeclarationEmitOutputFilePath, typoly_getOutputExtension } from "./emitter_extra"
 //@ts-ignore
 import {AccessorDeclaration,ArrayBindingPattern,ArrayLiteralExpression,ArrayTypeNode,ArrowFunction,AsExpression,AwaitExpression,base64encode,BigIntLiteral,BinaryExpression,BinaryOperatorToken,BindingElement,BindingPattern,Block,BlockLike,BreakStatement,BuildInfo,Bundle,CallExpression,CallSignatureDeclaration,canHaveLocals,canIncludeBindAndCheckDiagnostics,CaseBlock,CaseClause,CaseOrDefaultClause,cast,CatchClause,changeExtension,CharacterCodes,ClassDeclaration,ClassExpression,ClassStaticBlockDeclaration,combinePaths,CommaListExpression,CommentRange,compareEmitHelpers,comparePaths,Comparison,CompilerOptions,computeCommonSourceDirectoryOfFilenames,ComputedPropertyName,computeLineStarts,ConditionalExpression,ConditionalTypeNode,ConstructorDeclaration,ConstructorTypeNode,ConstructSignatureDeclaration,contains,ContinueStatement,createBinaryExpressionTrampoline,createDiagnosticCollection,createGetCanonicalFileName,createSourceMapGenerator,createTextWriter,Debug,DebuggerStatement,DeclarationName,Decorator,DefaultClause,DeleteExpression,directorySeparator,DoStatement,DotToken,ElementAccessExpression,emitDetachedComments,EmitFileNames,EmitFlags,EmitHint,EmitHost,emitNewLineBeforeLeadingCommentOfPosition,EmitOnly,EmitResolver,EmitResult,EmitTextWriter,EmitTransformers,emptyArray,ensureTrailingDirectorySeparator,EntityName,EnumDeclaration,EnumMember,escapeJsxAttributeString,escapeLeadingUnderscores,escapeNonAsciiString,escapeString,every,ExportAssignment,ExportDeclaration,ExportSpecifier,Expression,ExpressionStatement,ExpressionWithTypeArguments,Extension,ExternalModuleReference,factory,fileExtensionIs,fileExtensionIsOneOf,FileReference,filter,findIndex,firstOrUndefined,forEach,forEachChild,forEachLeadingCommentRange,forEachTrailingCommentRange,ForInOrOfStatement,ForInStatement,formatGeneratedName,formatGeneratedNamePart,ForOfStatement,ForStatement,FunctionDeclaration,FunctionExpression,FunctionLikeDeclaration,FunctionTypeNode,GeneratedIdentifier,GeneratedIdentifierFlags,GeneratedNamePart,GeneratedPrivateIdentifier,getAreDeclarationMapsEnabled,getBaseFileName,GetCanonicalFileName,getCommentRange,getConstantValue,getContainingNodeArray,getDeclarationEmitExtensionForPath,getDeclarationEmitOutputFilePath,getDirectoryPath,getEmitDeclarations,getEmitFlags,getEmitHelpers,getEmitModuleKind,getEmitModuleResolutionKind,getEmitScriptTarget,getExternalModuleName,getIdentifierTypeArguments,getInternalEmitFlags,getLeadingCommentRanges,getLineAndCharacterOfPosition,getLinesBetweenPositionAndNextNonWhitespaceCharacter,getLinesBetweenPositionAndPrecedingNonWhitespaceCharacter,getLinesBetweenRangeEndAndRangeStart,getLineStarts,getLiteralText,GetLiteralTextFlags,getNewLineCharacter,getNodeForGeneratedName,getNodeId,getNormalizedAbsolutePath,getOriginalNode,getOwnEmitOutputFilePath,getParseTreeNode,getRelativePathFromDirectory,getRelativePathToDirectoryOrUrl,getRootLength,getShebang,getSnippetElement,getSourceFileOfNode,getSourceFilePathInNewDir,getSourceFilesToEmit,getSourceMapRange,getSourceTextOfNodeFromSourceFile,getStartsOnNewLine,getSyntheticLeadingComments,getSyntheticTrailingComments,getTextOfJSDocComment,getTextOfJsxNamespacedName,getTrailingCommentRanges,getTrailingSemicolonDeferringWriter,getTypeNode,guessIndentation,HasLocals,hasRecordedExternalHelpers,HeritageClause,Identifier,idText,IfStatement,ImportAttribute,ImportAttributes,ImportClause,ImportDeclaration,ImportEqualsDeclaration,ImportOrExportSpecifier,ImportSpecifier,ImportTypeNode,IndexedAccessTypeNode,IndexSignatureDeclaration,InferTypeNode,InterfaceDeclaration,InternalEmitFlags,IntersectionTypeNode,isAccessExpression,isArray,isArrowFunction,isBinaryExpression,isBindingPattern,isBlock,isDeclarationFileName,isDecorator,isEmptyStatement,isExportAssignment,isExportSpecifier,isExpression,isFileLevelUniqueName,isFunctionLike,isGeneratedIdentifier,isGeneratedPrivateIdentifier,isIdentifier,isImportAttributes,isImportEqualsDeclaration,isIncrementalCompilation,isInJsonFile,isJSDocLikeText,isJsonSourceFile,isJsxClosingElement,isJsxNamespacedName,isJsxOpeningElement,isKeyword,isLet,isLiteralExpression,isMemberName,isModifier,isModuleDeclaration,isNodeDescendantOf,isNumericLiteral,isParenthesizedExpression,isPartiallyEmittedExpression,isPinnedComment,isPrivateIdentifier,isPrologueDirective,isRecognizedTripleSlashComment,isSourceFile,isSourceFileNotJson,isStringLiteral,isTemplateLiteralKind,isTokenKind,isTypeParameterDeclaration,isVarAwaitUsing,isVarConst,isVarUsing,JSDoc,JSDocAugmentsTag,JSDocCallbackTag,JSDocComment,JSDocEnumTag,JSDocFunctionType,JSDocImplementsTag,JSDocImportTag,JSDocNameReference,JSDocNonNullableType,JSDocNullableType,JSDocOptionalType,JSDocOverloadTag,JSDocPropertyLikeTag,JSDocReturnTag,JSDocSatisfiesTag,JSDocSeeTag,JSDocSignature,JSDocTag,JSDocTemplateTag,JSDocThisTag,JSDocThrowsTag,JSDocTypedefTag,JSDocTypeExpression,JSDocTypeLiteral,JSDocTypeTag,JSDocVariadicType,JsxAttribute,JsxAttributes,JsxAttributeValue,JsxClosingElement,JsxClosingFragment,JsxElement,JsxEmit,JsxExpression,JsxFragment,JsxNamespacedName,JsxOpeningElement,JsxOpeningFragment,JsxSelfClosingElement,JsxSpreadAttribute,JsxTagNameExpression,JsxText,LabeledStatement,last,lastOrUndefined,LateBoundDeclaration,length,ListFormat,LiteralExpression,LiteralLikeNode,LiteralTypeNode,makeIdentifierFromModuleName,MappedTypeNode,memoize,MetaProperty,MethodDeclaration,MethodSignature,Modifier,ModifierLike,ModuleBlock,ModuleDeclaration,ModuleKind,ModuleReference,moveRangePastModifiers,NamedDeclaration,NamedExports,NamedImports,NamedImportsOrExports,NamedTupleMember,NamespaceExport,NamespaceExportDeclaration,NamespaceImport,NewExpression,Node,NodeArray,NodeFlags,nodeIsSynthesized,noEmitNotification,noEmitSubstitution,NonNullExpression,normalizePath,normalizeSlashes,notImplemented,NumericLiteral,ObjectBindingPattern,ObjectLiteralExpression,OptionalTypeNode,ParameterDeclaration,ParenthesizedExpression,ParenthesizedTypeNode,ParsedCommandLine,PartiallyEmittedExpression,Placeholder,positionIsSynthesized,positionsAreOnSameLine,PostfixUnaryExpression,PrefixUnaryExpression,Printer,PrinterOptions,PrintHandlers,PrivateIdentifier,PropertyAccessExpression,PropertyAssignment,PropertyDeclaration,PropertySignature,QualifiedName,rangeEndIsOnSameLineAsRangeStart,rangeEndPositionsAreOnSameLine,rangeIsOnSingleLine,rangeStartPositionsAreOnSameLine,readJsonOrUndefined,removeFileExtension,resolvePath,RestTypeNode,ReturnStatement,SatisfiesExpression,ScriptTarget,setOriginalNode,setTextRange,setTextRangePosEnd,ShorthandPropertyAssignment,SignatureDeclaration,singleOrUndefined,skipPartiallyEmittedExpressions,skipTrivia,SnippetElement,SnippetKind,some,SourceFile,SourceMapEmitResult,SourceMapGenerator,SourceMapSource,SpreadAssignment,SpreadElement,Statement,StringLiteral,supportedJSExtensionsFlat,SwitchStatement,Symbol,SymbolFlags,SyntaxKind,SynthesizedComment,sys,TabStop,TaggedTemplateExpression,TemplateExpression,TemplateLiteralTypeNode,TemplateLiteralTypeSpan,TemplateSpan,TextRange,ThrowStatement,TokenFlags,tokenToString,toSorted,tracing,TransformationResult,transformNodes,tryCast,TryStatement,TupleTypeNode,TypeAliasDeclaration,TypeAssertion,TypeLiteralNode,TypeNode,TypeOfExpression,TypeOperatorNode,TypeParameterDeclaration,TypePredicateNode,TypeQueryNode,TypeReferenceNode,UnionTypeNode,VariableDeclaration,VariableDeclarationList,VariableStatement,version,VoidExpression,WhileStatement,WithStatement,writeCommentRange,writeFile,WriteFileCallbackData,YieldExpression,} from "typescript";
 const performance = (ts as any).performance;
@@ -276,7 +276,7 @@ export function emitFiles(resolver: EmitResolver, host: EmitHost, targetSourceFi
         emitSkipped,
         diagnostics: emitterDiagnostics.getDiagnostics(),
         emittedFiles: emittedFilesList,
-        sourceMaps: sourceMapDataList,
+        sourceMaps: sourceMapDataList
     };
     function emitSourceFileOrBundle({ jsFilePath, sourceMapFilePath, declarationFilePath, declarationMapPath, buildInfoPath }: EmitFileNames, sourceFileOrBundle: SourceFile | Bundle | undefined) {
         tracing?.push(tracing.Phase.Emit, "emitJsFileOrBundle", { jsFilePath });
@@ -329,7 +329,7 @@ export function emitFiles(resolver: EmitResolver, host: EmitHost, targetSourceFi
             sourceMap: compilerOptions.sourceMap,
             inlineSourceMap: compilerOptions.inlineSourceMap,
             inlineSources: compilerOptions.inlineSources,
-            extendedDiagnostics: compilerOptions.extendedDiagnostics,
+            extendedDiagnostics: compilerOptions.extendedDiagnostics
         };
         // Create a printer to print the nodes
         const printer = createPrinterFunc({typeChecker, compilerOptions, resolver, host}, printerOptions, {
@@ -338,7 +338,7 @@ export function emitFiles(resolver: EmitResolver, host: EmitHost, targetSourceFi
             // transform hooks
             onEmitNode: transform.emitNodeWithNotification,
             isEmitNotificationEnabled: transform.isEmitNotificationEnabled,
-            substituteNode: transform.substituteNode,
+            substituteNode: transform.substituteNode
         });
         Debug.assert(transform.transformed.length === 1, "Should only see one output from the transform");
         printSourceFileOrBundle(jsFilePath, sourceMapFilePath, transform, printer, compilerOptions);
@@ -395,7 +395,7 @@ export function emitFiles(resolver: EmitResolver, host: EmitHost, targetSourceFi
                 inlineSourceMap: compilerOptions.inlineSourceMap,
                 extendedDiagnostics: compilerOptions.extendedDiagnostics,
                 onlyPrintJsDocStyle: true,
-                omitBraceSourceMapPositions: true,
+                omitBraceSourceMapPositions: true
             };
             const declarationPrinter = createPrinterFunc({typeChecker, compilerOptions, resolver, host}, printerOptions, {
                 // resolver hooks
@@ -403,14 +403,13 @@ export function emitFiles(resolver: EmitResolver, host: EmitHost, targetSourceFi
                 // transform hooks
                 onEmitNode: declarationTransform.emitNodeWithNotification,
                 isEmitNotificationEnabled: declarationTransform.isEmitNotificationEnabled,
-                substituteNode: declarationTransform.substituteNode,
+                substituteNode: declarationTransform.substituteNode
             });
             const dtsWritten = printSourceFileOrBundle(declarationFilePath, declarationMapPath, declarationTransform, declarationPrinter, {
                 sourceMap: printerOptions.sourceMap,
                 sourceRoot: compilerOptions.sourceRoot,
                 mapRoot: compilerOptions.mapRoot,
-                extendedDiagnostics: compilerOptions.extendedDiagnostics,
-                // Explicitly do not passthru either `inline` option
+                extendedDiagnostics: compilerOptions.extendedDiagnostics
             });
             if (emittedFilesList) {
                 if (dtsWritten)
@@ -466,7 +465,7 @@ export function emitFiles(resolver: EmitResolver, host: EmitHost, targetSourceFi
             if (sourceMapDataList) {
                 sourceMapDataList.push({
                     inputSourceFileNames: sourceMapGenerator.getSources(),
-                    sourceMap: sourceMapGenerator.toJSON(),
+                    sourceMap: sourceMapGenerator.toJSON()
                 });
             }
             const sourceMappingURL = getSourceMappingURL(mapOptions, sourceMapGenerator, jsFilePath, sourceMapFilePath, sourceFile);
@@ -609,7 +608,7 @@ export const notImplementedResolver: EmitResolver = {
     isImportRequiredByAugmentation: notImplemented,
     isDefinitelyReferenceToGlobalSymbolObject: notImplemented,
     createLateBoundIndexSignatures: notImplemented,
-    symbolToDeclarations: notImplemented,
+    symbolToDeclarations: notImplemented
 };
 const enum PipelinePhase {
     Notification,
@@ -627,9 +626,9 @@ export const createPrinterWithRemoveCommentsNeverAsciiEscape: () => Printer = /*
 /** @internal */
 export const createPrinterWithRemoveCommentsOmitTrailingSemicolon: () => Printer = /* @__PURE__ */ memoize(() => createPrinter({}, { removeComments: true, omitTrailingSemicolon: true }));
 export function createPrinter(extra: EmitterExtraContext, printerOptions: PrinterOptions = {}, handlers: PrintHandlers = {}): Printer {
-    return new CPrinter(printerOptions, handlers, extra);
+    return new RawTypescriptPrinter(printerOptions, handlers, extra);
 }
-export class CPrinter {
+export class RawTypescriptPrinter {
     public printerOptions: PrinterOptions = {};
     public handlers: PrintHandlers = {};
     constructor(__printerOptions: PrinterOptions = {}, __handlers: PrintHandlers = {}, public extra: EmitterExtraContext) {
@@ -697,7 +696,7 @@ export class CPrinter {
     exitComment = (performance.createTimerIf)(this.extendedDiagnostics, "commentTime", "beforeComment", "afterComment").exit;
     parenthesizer = factory.parenthesizer;
     typeArgumentParenthesizerRuleSelector: OrdinalParentheizerRuleSelector<TypeNode> = {
-        select: index => index === 0 ? this.parenthesizer.parenthesizeLeadingTypeArgument : undefined,
+        select: index => index === 0 ? this.parenthesizer.parenthesizeLeadingTypeArgument : undefined
     };
     emitBinaryExpression = this.createEmitBinaryExpression();
     public printNode(hint: EmitHint, node: Node, sourceFile: SourceFile): string {
@@ -2082,7 +2081,7 @@ export class CPrinter {
                     containerEndStack: [-1],
                     declarationListContainerEndStack: [-1],
                     shouldEmitCommentsStack: [false],
-                    shouldEmitSourceMapsStack: [false],
+                    shouldEmitSourceMapsStack: [false]
                 };
             }
             return state;

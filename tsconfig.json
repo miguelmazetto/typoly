@@ -28,7 +28,7 @@
     "paths": {
       "typescript": ["./node_modules/@typoly/typescript-src/src/typescript/typescript.ts"],
       "tsc/*": ["./node_modules/@typoly/typescript-src/src/compiler"],
-      "base_printer": ["./generated/printer.ts"] 
+      "base_printer": ["./out_languages/common/ts_printer.ts"] 
     }
   }
 }
