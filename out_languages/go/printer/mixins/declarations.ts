@@ -16,15 +16,13 @@ import type {
 } from "typescript";
 
 export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Base: TBase) {
-    class DeclarationsMixin extends Base {
-        private classFields: Map<string, {name: string, type: string}[]> = new Map();
+    return class DeclarationsMixin extends Base {
         private currentClassName: string = "";
         
         emitClassDeclaration(node: ClassDeclaration): void {
             const className = this.toPascalCase(this.getTextOfNode(node.name!));
             this.currentClassName = className;
             
-            // Collect fields
             const fields: {name: string, type: string, exported: boolean}[] = [];
             const methods: MethodDeclaration[] = [];
             let constructorNode: ConstructorDeclaration | undefined;
@@ -34,7 +32,7 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
                     const prop = member as PropertyDeclaration;
                     const propName = this.getTextOfNode(prop.name);
                     const propType = prop.type ? this.typeToString(prop.type) : "interface{}";
-                    const isExported = !prop.modifiers?.some(m => m.kind === ts.SyntaxKind.PrivateKeyword);
+                    const isExported = !prop.modifiers?.some((m: any) => m.kind === ts.SyntaxKind.PrivateKeyword);
                     fields.push({
                         name: this.toPascalCase(propName),
                         type: propType,
@@ -47,7 +45,6 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
                 }
             }
             
-            // Handle inheritance
             let embeddedFields: string[] = [];
             if (node.heritageClauses) {
                 for (const clause of node.heritageClauses) {
@@ -60,20 +57,17 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
                 }
             }
             
-            // Emit struct
             this.write("type ");
             this.write(className);
             this.write(" struct {");
             this.writeLine();
             this.increaseIndent();
             
-            // Emit embedded base classes
             for (const base of embeddedFields) {
                 this.write(base);
                 this.writeLine();
             }
             
-            // Emit fields
             for (const field of fields) {
                 if (field.exported) {
                     this.write(field.name);
@@ -90,12 +84,10 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
             this.writeLine();
             this.writeLine();
             
-            // Emit constructor function
             if (constructorNode) {
                 this.emitConstructorFunction(className, constructorNode, fields, embeddedFields);
             }
             
-            // Emit methods
             for (const method of methods) {
                 this.emitMethod(method, className);
             }
@@ -106,7 +98,7 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
         private emitConstructorFunction(
             className: string, 
             node: ConstructorDeclaration, 
-            fields: {name: string, type: string}[],
+            fields: {name: string, type: string, exported: boolean}[],
             embeddedFields: string[]
         ): void {
             this.write("func New");
@@ -122,36 +114,57 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
             this.writeLine();
             this.increaseIndent();
             
-            // Check for parameter properties and emit assignments
-            const paramProps: string[] = [];
-            for (const param of node.parameters) {
-                const paramName = this.getTextOfNode(param.name);
-                const hasModifier = (param as any).modifiers?.some((m: any) => 
-                    m.kind === ts.SyntaxKind.PublicKeyword ||
-                    m.kind === ts.SyntaxKind.PrivateKeyword ||
-                    m.kind === ts.SyntaxKind.ProtectedKeyword
-                );
-                if (hasModifier || fields.some(f => f.name.toLowerCase() === this.toPascalCase(paramName).toLowerCase())) {
-                    paramProps.push(paramName);
-                }
-            }
-            
             this.write("return &");
             this.write(className);
             this.writePunctuation("{");
             this.writeLine();
             this.increaseIndent();
             
-            // Initialize fields from parameters
-            for (const param of node.parameters) {
-                const paramName = this.getTextOfNode(param.name);
-                const pascalName = this.toPascalCase(paramName);
-                this.write(pascalName);
-                this.writePunctuation(":");
-                this.writeSpace();
-                this.write(paramName);
-                this.writePunctuation(",");
-                this.writeLine();
+            // For each field, find the corresponding parameter
+            for (const field of fields) {
+                // Try to find a parameter that matches this field
+                let matchedParam: string | undefined;
+                
+                // First try exact match on parameter name (case-insensitive)
+                for (const param of node.parameters) {
+                    const paramName = this.getTextOfNode(param.name);
+                    if (paramName.toLowerCase() === field.name.toLowerCase() ||
+                        paramName.toLowerCase() === field.name.charAt(0).toLowerCase() + field.name.slice(1).toLowerCase()) {
+                        matchedParam = paramName;
+                        break;
+                    }
+                }
+                
+                // If no match found, check constructor body assignments
+                if (!matchedParam && node.body) {
+                    for (const stmt of node.body.statements) {
+                        if (ts.isExpressionStatement(stmt)) {
+                            const expr = stmt.expression;
+                            if (ts.isBinaryExpression(expr) && 
+                                expr.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+                                ts.isPropertyAccessExpression(expr.left) &&
+                                expr.left.expression.kind === ts.SyntaxKind.ThisKeyword) {
+                                const propName = this.getTextOfNode(expr.left.name);
+                                if (propName.toLowerCase() === field.name.toLowerCase()) {
+                                    // Found the assignment, now find what it's assigned to
+                                    if (ts.isIdentifier(expr.right)) {
+                                        matchedParam = this.getTextOfNode(expr.right);
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (matchedParam) {
+                    this.write(field.name);
+                    this.writePunctuation(":");
+                    this.writeSpace();
+                    this.write(matchedParam);
+                    this.writePunctuation(",");
+                    this.writeLine();
+                }
             }
             
             this.decreaseIndent();
@@ -166,7 +179,7 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
         
         private emitMethod(node: MethodDeclaration, receiverType: string): void {
             const methodName = this.toPascalCase(this.getTextOfNode(node.name));
-            const isExported = !node.modifiers?.some(m => m.kind === ts.SyntaxKind.PrivateKeyword);
+            const isExported = !node.modifiers?.some((m: any) => m.kind === ts.SyntaxKind.PrivateKeyword);
             
             if (node.typeParameters && node.typeParameters.length > 0) {
                 this.writeComment("// Generic method - simplified");
@@ -203,7 +216,6 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
         
         emitFunctionDeclaration(node: FunctionDeclaration): void {
             const funcName = this.getTextOfNode(node.name!);
-            const isExported = this.isExported(node);
             
             if (node.typeParameters && node.typeParameters.length > 0) {
                 this.writeComment("// Generic function - simplified");
@@ -211,12 +223,7 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
             }
             
             this.write("func ");
-            // In Go, exported functions must start with capital letter
-            if (isExported) {
-                this.write(this.toPascalCase(funcName));
-            } else {
-                this.write(funcName.charAt(0).toLowerCase() + funcName.slice(1));
-            }
+            this.write(funcName);
             
             this.writePunctuation("(");
             this.emitParameters(node.parameters);
@@ -242,27 +249,125 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
         
         emitParameter(node: ts.ParameterDeclaration): void {
             const paramName = this.getTextOfNode(node.name);
-            const paramType = node.type ? this.typeToString(node.type) : "interface{}";
-            
             this.write(paramName);
             this.writeSpace();
-            this.write(paramType);
+            if (node.type) {
+                const typeStr = this.typeToString(node.type);
+                if (typeStr.includes("|") || typeStr === "interface{}" || typeStr === "any") {
+                    this.write("*typoly.Union");
+                } else {
+                    this.write(typeStr);
+                }
+            } else {
+                this.write("interface{}");
+            }
         }
         
-        emitParameter(node: ts.ParameterDeclaration): void {
-            const paramName = this.getTextOfNode(node.name);
-            const paramType = node.type ? this.typeToString(node.type) : "interface{}";
-            
-            this.write(paramName);
-            this.writeSpace();
-            this.write(paramType);
+        emitParameters(params: ts.NodeArray<ts.ParameterDeclaration> | ts.ParameterDeclaration[]): void {
+            for (let i = 0; i < params.length; i++) {
+                this.emitParameter(params[i]);
+                if (i < params.length - 1) {
+                    this.writePunctuation(",");
+                    this.writeSpace();
+                }
+            }
+        }
+        
+        emitVariableStatement(node: VariableStatement): void {
+            for (const decl of node.declarationList.declarations) {
+                const name = this.getTextOfNode(decl.name);
+                const isConst = node.declarationList.flags & ts.NodeFlags.Const;
+                
+                if (this.isExported(node)) {
+                    const pascalName = this.toPascalCase(name);
+                    
+                    if (isConst) {
+                        this.write("const ");
+                    } else {
+                        this.write("var ");
+                    }
+                    
+                    this.write(pascalName);
+                    
+                    let typeStr: string | undefined;
+                    if (decl.type) {
+                        typeStr = this.typeToString(decl.type);
+                    } else if (this.typeChecker && decl.initializer) {
+                        try {
+                            const type = this.typeChecker.getTypeAtLocation(decl);
+                            if (type && !(type.flags & ts.TypeFlags.Any)) {
+                                typeStr = this.typeChecker.typeToString(type, decl);
+                                if (typeStr !== "any") {
+                                    typeStr = this.mapInferredType(typeStr);
+                                } else {
+                                    typeStr = undefined;
+                                }
+                            }
+                        } catch {
+                            typeStr = undefined;
+                        }
+                    }
+                    
+                    if (typeStr && !decl.initializer) {
+                        this.writeSpace();
+                        this.write(typeStr);
+                    }
+                    
+                    if (decl.initializer) {
+                        this.writeSpace();
+                        this.writeOperator("=");
+                        this.writeSpace();
+                        this.emit(decl.initializer);
+                    }
+                    
+                    this.writeLine();
+                } else {
+                    if (decl.initializer) {
+                        this.write(name);
+                        this.writeSpace();
+                        this.writeOperator(":=");
+                        this.writeSpace();
+                        this.emit(decl.initializer);
+                        this.writeLine();
+                        this.write("_ = ");
+                        this.write(name);
+                        this.writeLine();
+                    } else {
+                        this.write("var ");
+                        this.write(name);
+                        
+                        let typeStr: string | undefined;
+                        if (decl.type) {
+                            typeStr = this.typeToString(decl.type);
+                        } else {
+                            typeStr = "interface{}";
+                        }
+                        
+                        if (typeStr) {
+                            this.writeSpace();
+                            this.write(typeStr);
+                        }
+                        
+                        this.writeLine();
+                    }
+                }
+            }
+        }
+        
+        emitVariableDeclaration(node: ts.VariableDeclaration): void {
+            this.emit(node.name);
+            if (node.initializer) {
+                this.writeSpace();
+                this.writeOperator("=");
+                this.writeSpace();
+                this.emit(node.initializer);
+            }
         }
         
         emitEnumDeclaration(node: EnumDeclaration): void {
             const enumName = this.toPascalCase(this.getTextOfNode(node.name));
             const isExported = this.isExported(node);
             
-            // Emit type
             this.write("type ");
             if (isExported) {
                 this.write(enumName);
@@ -273,7 +378,6 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
             this.writeLine();
             this.writeLine();
             
-            // Emit constants
             this.write("const (");
             this.writeLine();
             this.increaseIndent();
@@ -375,7 +479,6 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
         }
         
         emitModuleDeclaration(node: ModuleDeclaration): void {
-            // Go doesn't have modules like TypeScript, treat as package
             this.writeComment("// Module: " + this.getTextOfNode(node.name));
             this.writeLine();
             if (node.body) {
@@ -387,95 +490,9 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
             }
         }
         
-        emitVariableStatement(node: VariableStatement): void {
-            for (const decl of node.declarationList.declarations) {
-                const name = this.getTextOfNode(decl.name);
-                const isConst = node.declarationList.flags & ts.NodeFlags.Const;
-                
-                if (this.isExported(node)) {
-                    // Package-level exported variable
-                    const pascalName = this.toPascalCase(name);
-                    
-                    if (isConst) {
-                        this.write("const ");
-                    } else {
-                        this.write("var ");
-                    }
-                    
-                    this.write(pascalName);
-                    
-                    let typeStr: string | undefined;
-                    if (decl.type) {
-                        typeStr = this.typeToString(decl.type);
-                    } else if (this.typeChecker && decl.initializer) {
-                        try {
-                            const type = this.typeChecker.getTypeAtLocation(decl);
-                            if (type && !(type.flags & ts.TypeFlags.Any)) {
-                                typeStr = this.typeChecker.typeToString(type, decl);
-                                if (typeStr !== "any") {
-                                    typeStr = this.mapInferredType(typeStr);
-                                } else {
-                                    typeStr = undefined;
-                                }
-                            }
-                        } catch {
-                            typeStr = undefined;
-                        }
-                    }
-                    
-                    // In Go, if there's an initializer, we can omit the type
-                    if (typeStr && !decl.initializer) {
-                        this.writeSpace();
-                        this.write(typeStr);
-                    }
-                    
-                    if (decl.initializer) {
-                        this.writeSpace();
-                        this.writeOperator("=");
-                        this.writeSpace();
-                        this.emit(decl.initializer);
-                    }
-                    
-                    this.writeLine();
-                } else {
-                    // For local variables with initializer, use := (short declaration)
-                    // For package-level without initializer, use var
-                    if (decl.initializer) {
-                        this.write(name);
-                        this.writeSpace();
-                        this.writeOperator(":=");
-                        this.writeSpace();
-                        this.emit(decl.initializer);
-                        this.writeLine();
-                        // Add _ = name to suppress unused variable warning
-                        this.write("_ = ");
-                        this.write(name);
-                        this.writeLine();
-                    } else {
-                        this.write("var ");
-                        this.write(name);
-                        
-                        let typeStr: string | undefined;
-                        if (decl.type) {
-                            typeStr = this.typeToString(decl.type);
-                        } else {
-                            typeStr = "interface{}";
-                        }
-                        
-                        if (typeStr) {
-                            this.writeSpace();
-                            this.write(typeStr);
-                        }
-                        
-                        this.writeLine();
-                    }
-                }
-            }
-        }
-        
         emitPropertyDeclaration(node: PropertyDeclaration): void {
             const propName = this.getTextOfNode(node.name);
-            const isPrivate = node.modifiers?.some(m => m.kind === ts.SyntaxKind.PrivateKeyword);
+            const isPrivate = node.modifiers?.some((m: any) => m.kind === ts.SyntaxKind.PrivateKeyword);
             
             if (isPrivate) {
                 this.write(propName.charAt(0).toLowerCase() + propName.slice(1));
@@ -547,36 +564,5 @@ export function DeclarationsMixin<TBase extends new (...args: any[]) => any>(Bas
         emitExportDeclaration(node: ts.ExportDeclaration): void {
             // Handled at module level
         }
-        
-        emitParameter(node: ts.ParameterDeclaration): void {
-            const paramName = this.getTextOfNode(node.name);
-            const paramType = node.type ? this.typeToString(node.type) : "interface{}";
-            
-            this.write(paramName);
-            this.writeSpace();
-            this.write(paramType);
-        }
-        
-        emitParameters(params: ts.NodeArray<ts.ParameterDeclaration> | ts.ParameterDeclaration[]): void {
-            for (let i = 0; i < params.length; i++) {
-                this.emitParameter(params[i]);
-                if (i < params.length - 1) {
-                    this.writePunctuation(",");
-                    this.writeSpace();
-                }
-            }
-        }
-        
-        emitVariableDeclaration(node: ts.VariableDeclaration): void {
-            this.emit(node.name);
-            if (node.initializer) {
-                this.writeSpace();
-                this.writeOperator("=");
-                this.writeSpace();
-                this.emit(node.initializer);
-            }
-        }
     }
-    
-    return DeclarationsMixin;
 }

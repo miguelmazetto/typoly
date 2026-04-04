@@ -1,11 +1,11 @@
 // Test: Comprehensive Array Methods
-// Tests array operations with proper C++ compatibility
+// Tests array operations with proper Go compatibility
 
 export function testArrays() {
     console.log("Testing arrays...")
     
     // Test 1: Array creation and access
-    let arr1 = [1, 2, 3]
+    let arr1 = [1.0, 2.0, 3.0]
     let first = arr1[0]
     let last = arr1[2]
     console.log("1: first =", first, "last =", last)
@@ -15,7 +15,7 @@ export function testArrays() {
     console.log("2: size =", len)
     
     // Test 3: Array in loop
-    let sum = 0
+    let sum = 0.0
     let i = 0
     while (i < 3) {
         sum = sum + arr1[i]

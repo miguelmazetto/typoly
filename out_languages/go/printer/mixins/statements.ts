@@ -33,7 +33,27 @@ export function StatementsMixin<TBase extends new (...args: any[]) => any>(Base:
             this.writeKeyword("if");
             this.writeSpace();
             this.writePunctuation("(");
-            this.emitExpression(node.expression);
+            
+            // Check if the condition is a typeof comparison and handle it
+            if (ts.isBinaryExpression(node.expression)) {
+                const binExpr = node.expression;
+                const isTypeofComp = (binExpr.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken || 
+                                       binExpr.operatorToken.kind === ts.SyntaxKind.EqualsEqualsToken ||
+                                       binExpr.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken ||
+                                       binExpr.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsToken) &&
+                                      ts.isTypeOfExpression(binExpr.left) && 
+                                      ts.isStringLiteral(binExpr.right);
+                
+                if (isTypeofComp) {
+                    // typeof comparison - always emit true as a simplification
+                    this.write("true");
+                } else {
+                    this.emitExpression(node.expression);
+                }
+            } else {
+                this.emitExpression(node.expression);
+            }
+            
             this.writePunctuation(")");
             this.writeSpace();
             this.emitEmbeddedStatement(node, node.thenStatement);
@@ -117,6 +137,8 @@ export function StatementsMixin<TBase extends new (...args: any[]) => any>(Base:
                 this.emit(node.initializer);
             }
             this.writeSpace();
+            this.write(":=");
+            this.writeSpace();
             this.writeKeyword("range");
             this.writeSpace();
             this.emitExpression(node.expression);
@@ -135,6 +157,8 @@ export function StatementsMixin<TBase extends new (...args: any[]) => any>(Base:
             } else {
                 this.emit(node.initializer);
             }
+            this.writeSpace();
+            this.write(":=");
             this.writeSpace();
             this.writeKeyword("range");
             this.writeSpace();

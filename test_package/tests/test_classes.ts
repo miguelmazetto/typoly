@@ -49,7 +49,7 @@ export function testClasses() {
     console.log("Testing classes...")
     
     // Test 1: Basic class instantiation
-    let calc = Calculator(10)
+    let calc = new Calculator(10)
     console.log("1: Initial value =", calc.getResult())
     
     // Test 2: Method calls
@@ -61,7 +61,7 @@ export function testClasses() {
     console.log("3: After multiply(2) =", calc.getResult())
     
     // Test 4: Multiple instances
-    let calc2 = Calculator(100)
+    let calc2 = new Calculator(100)
     calc2.add(50)
     console.log("4: calc2 =", calc2.getResult())
     
@@ -70,7 +70,7 @@ export function testClasses() {
     console.log("5: calc2 =", calc2.getResult())
     
     // Test 6: Counter class
-    let counter = Counter()
+    let counter = new Counter()
     counter.increment()
     counter.increment()
     counter.increment()
@@ -84,7 +84,7 @@ export function testClasses() {
     console.log("7: After reset =", calc.getResult())
     
     // Test 8: Chained operations
-    let calc3 = Calculator(1)
+    let calc3 = new Calculator(1)
     calc3.add(2)
     calc3.multiply(3)
     calc3.add(4)

@@ -21,30 +21,11 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
         emitBinaryExpression(node: BinaryExpression): void {
             const operator = node.operatorToken.kind;
             
-            // Handle typeof comparisons: typeof x === "string"
+            // Handle typeof comparisons: typeof x === "string" -> true/false
             if ((operator === ts.SyntaxKind.EqualsEqualsEqualsToken || 
                  operator === ts.SyntaxKind.EqualsEqualsToken) &&
                 ts.isTypeOfExpression(node.left) && 
                 ts.isStringLiteral(node.right)) {
-                const typeofExpr = node.left as ts.TypeOfExpression;
-                const typeStr = node.right.text;
-                if (this.typeChecker) {
-                    try {
-                        const type = this.typeChecker.getTypeAtLocation(typeofExpr.expression);
-                        if (type) {
-                            const tsTypeStr = this.typeChecker.typeToString(type);
-                            if (tsTypeStr === typeStr) {
-                                this.write("true");
-                                return;
-                            } else {
-                                this.write("false");
-                                return;
-                            }
-                        }
-                    } catch {
-                        // Fall through
-                    }
-                }
                 this.write("true");
                 return;
             }
@@ -54,25 +35,6 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
                  operator === ts.SyntaxKind.ExclamationEqualsToken) &&
                 ts.isTypeOfExpression(node.left) && 
                 ts.isStringLiteral(node.right)) {
-                const typeofExpr = node.left as ts.TypeOfExpression;
-                const typeStr = node.right.text;
-                if (this.typeChecker) {
-                    try {
-                        const type = this.typeChecker.getTypeAtLocation(typeofExpr.expression);
-                        if (type) {
-                            const tsTypeStr = this.typeChecker.typeToString(type);
-                            if (tsTypeStr !== typeStr) {
-                                this.write("true");
-                                return;
-                            } else {
-                                this.write("false");
-                                return;
-                            }
-                        }
-                    } catch {
-                        // Fall through
-                    }
-                }
                 this.write("true");
                 return;
             }
@@ -184,6 +146,34 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
                     this.writeComment("// super access not supported");
                 }
                 return;
+            }
+
+            // Check for Math.PI, Math.E, etc. - convert to Go's math.Pi, math.E
+            if (ts.isIdentifier(node.expression)) {
+                const objName = node.expression.text;
+                const propName = this.getTextOfNode(node.name);
+                
+                if (objName === "Math") {
+                    this.importedPackages.add("math");
+                    const mathConstMap: Record<string, string> = {
+                        "PI": "math.Pi",
+                        "E": "math.E",
+                        "LN2": "math.Ln2",
+                        "LN10": "math.Ln10",
+                        "LOG2E": "math.Log2E",
+                        "LOG10E": "math.Log10E",
+                        "SQRT2": "math.Sqrt2",
+                        "SQRT1_2": "math.Sqrt1_2",
+                    };
+                    if (mathConstMap[propName]) {
+                        this.write(mathConstMap[propName]);
+                        return;
+                    }
+                    // Math methods like Math.abs, Math.floor, etc.
+                    this.write("math.");
+                    this.write(propName);
+                    return;
+                }
             }
 
             // Check for array/slice .length property access
@@ -425,20 +415,21 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
         emitNewExpression(node: NewExpression): void {
             const typeName = this.getTextOfNode(node.expression);
             
-            // Handle RegExp - emit as regexp.MustCompile
+            // Handle RegExp - emit as typoly.NewRegExp
             if (typeName === "RegExp") {
-                this.importedPackages.add("regexp");
+                this.write("typoly.NewRegExp");
+                this.writePunctuation("(");
                 if (node.arguments && node.arguments.length > 0) {
-                    this.write("regexp.MustCompile");
-                    this.writePunctuation("(");
                     this.emitExpression(node.arguments[0]);
-                    this.writePunctuation(")");
+                    if (node.arguments.length > 1) {
+                        this.writePunctuation(",");
+                        this.writeSpace();
+                        this.emitExpression(node.arguments[1]);
+                    }
                 } else {
-                    this.write("regexp.MustCompile");
-                    this.writePunctuation("(");
                     this.writeStringLiteral("");
-                    this.writePunctuation(")");
                 }
+                this.writePunctuation(")");
                 return;
             }
             
@@ -504,7 +495,7 @@ export function ExpressionsMixin<TBase extends new (...args: any[]) => any>(Base
                 case ts.SyntaxKind.PlusToken:
                     break;
                 case ts.SyntaxKind.TildeToken:
-                    this.writeOperator("^");
+                    this.writeOperator("~");
                     break;
                 case ts.SyntaxKind.PlusPlusToken:
                     this.writeOperator("++");

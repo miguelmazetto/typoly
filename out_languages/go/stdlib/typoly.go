@@ -84,7 +84,6 @@ func (s String) PadEnd(targetLength int, padString String) String {
 	if s.Length() >= targetLength {
 		return s
 	}
-	padLen := targetLength - s.Length()
 	pad := padString.value
 	if len(pad) == 0 {
 		pad = " "
@@ -106,7 +105,6 @@ func (s String) PadStart(targetLength int, padString String) String {
 	if s.Length() >= targetLength {
 		return s
 	}
-	padLen := targetLength - s.Length()
 	pad := padString.value
 	if len(pad) == 0 {
 		pad = " "

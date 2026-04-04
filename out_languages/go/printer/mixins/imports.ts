@@ -12,7 +12,7 @@ const NODE_CORE_MODULES: Record<string, string> = {
     'fs': 'test_package/stdlib/fs',
     'path': 'path',
     'os': 'os',
-    'regexp': 'regexp',
+    'regexp': 'test_package/stdlib',
     'crypto': 'crypto',
     'encoding': 'encoding',
     'time': 'time',
@@ -25,10 +25,42 @@ const NODE_CORE_MODULES: Record<string, string> = {
 };
 
 export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TBase) {
-    class ImportsMixin extends Base {
+    return class ImportsMixin extends Base {
         private usedPackages: Set<string> = new Set();
         private importedModuleNames: string[] = [];
         private needsFmt: boolean = false;
+        private needsTypoly: boolean = false;
+        private needsMath: boolean = false;
+        private needsStrings: boolean = false;
+        
+        // Pre-scan AST for patterns that require specific imports
+        private preScanAST(sourceFile: ts.SourceFile): void {
+            const visit = (node: ts.Node) => {
+                // Check for new RegExp()
+                if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "RegExp") {
+                    this.importedPackages.add("test_package/stdlib");
+                    this.needsTypoly = true;
+                }
+                
+                // Check for Math usage
+                if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "Math") {
+                    this.needsMath = true;
+                }
+                
+                // Check for string method calls
+                if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
+                    const methodName = node.name.text;
+                    const stringMethods = ["includes", "toLowerCase", "toUpperCase", "replace", "replaceAll", 
+                                          "indexOf", "lastIndexOf", "startsWith", "endsWith", "trim", "trimStart", "trimEnd", "split"];
+                    if (stringMethods.includes(methodName)) {
+                        this.needsStrings = true;
+                    }
+                }
+                
+                node.forEachChild(visit);
+            };
+            sourceFile.forEachChild(visit);
+        }
         
         emitImportDeclaration(node: ImportDeclaration): void {
             const moduleSpecifier = node.moduleSpecifier;
@@ -55,7 +87,6 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
             
             // Project import
             const importPath = this.computeImportPath(moduleName);
-            // Use the last part of the import path as the package name
             const pathParts = importPath.split("/");
             const pkgName = pathParts[pathParts.length - 1];
             this.importedModuleNames.push(pkgName);
@@ -90,8 +121,14 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
             this.importedModuleNames = [];
             this.usedPackages = new Set();
             this.needsFmt = false;
+            this.needsTypoly = false;
+            this.needsMath = false;
+            this.needsStrings = false;
             
             this.currentPackagePath = this.computePackageName(node.fileName);
+            
+            // Pre-scan AST for patterns that require specific imports
+            this.preScanAST(node);
             
             // First pass: check if we need fmt (for console.log)
             for (const stmt of node.statements) {
@@ -101,7 +138,7 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
                 }
             }
             
-            // Emit package declaration
+            // Emit package declaration FIRST
             this.write("package ");
             this.write(this.currentPackagePath);
             this.writeLine();
@@ -115,17 +152,37 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
             }
             
             // Emit imports section
-            if (this.importedPackages.size > 0 || this.usedPackages.size > 0 || this.needsFmt) {
+            if (this.importedPackages.size > 0 || this.usedPackages.size > 0 || this.needsFmt || this.needsTypoly || this.needsMath || this.needsStrings) {
                 this.write("import (");
                 this.writeLine();
                 this.increaseIndent();
                 
+                // Add typoly package if needed
+                if (this.needsTypoly) {
+                    this.write("\"test_package/stdlib\"");
+                    this.writeLine();
+                }
+                
+                // Add math if needed
+                if (this.needsMath) {
+                    this.write("\"math\"");
+                    this.writeLine();
+                }
+                
+                // Add strings if needed
+                if (this.needsStrings) {
+                    this.write("\"strings\"");
+                    this.writeLine();
+                }
+                
                 // Standard library imports
                 for (const pkg of this.importedPackages) {
-                    this.write("\"");
-                    this.write(pkg);
-                    this.write("\"");
-                    this.writeLine();
+                    if (pkg !== "test_package/stdlib") {
+                        this.write("\"");
+                        this.write(pkg);
+                        this.write("\"");
+                        this.writeLine();
+                    }
                 }
                 
                 // Add fmt if needed
@@ -160,8 +217,8 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
                 
                 if (ts.isVariableStatement(stmt)) {
                     const hasInitializer = stmt.declarationList.declarations.some(d => d.initializer);
+                    // All variables with initializers go to TLD
                     if (hasInitializer) {
-                        // All variables with initializers go to TLD
                         tldStatements.push(stmt);
                     } else {
                         declarations.push(stmt);
@@ -177,7 +234,7 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
                 }
             }
             
-            // Emit declarations at package level (no forward declarations needed in Go)
+            // Emit declarations at package level
             for (const decl of declarations) {
                 this.emit(decl);
             }
@@ -215,10 +272,9 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
                 if (ts.isVariableStatement(stmt)) {
                     for (const decl of stmt.declarationList.declarations) {
                         if (decl.initializer) {
-                            // Use := for local variable declaration with initialization
                             const name = this.getTextOfNode(decl.name);
                             this.write(name);
-                            this.write(" := ");
+                            this.write(" = ");
                             this.emit(decl.initializer);
                             this.writeLine();
                         }
@@ -249,7 +305,5 @@ export function ImportsMixin<TBase extends new (...args: any[]) => any>(Base: TB
             visit(stmt);
             return found;
         }
-    }
-    
-    return ImportsMixin;
+    };
 }

@@ -140,6 +140,10 @@ export class GoPrinterBase extends CPrinter {
             return typeMap[tsType];
         }
         
+        if (tsType.includes("|")) {
+            return "interface{}";
+        }
+        
         if (tsType.startsWith("Array<")) {
             const inner = tsType.slice(6, -1);
             return "[]" + this.mapInferredType(inner);
