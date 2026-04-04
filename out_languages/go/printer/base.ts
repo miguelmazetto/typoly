@@ -1,26 +1,20 @@
-import { RawTypescriptPrinter } from "base_printer";
 import * as ts from 'typescript';
 import type { SourceFile, Identifier, Node, TypeNode } from "typescript";
+import { TypolyBasePrinter } from '../../common/base_printer';
 import { loadFunctionOverrides, resolveFunctionOverride } from '../config/resolver';
 
-export class GoPrinterBase extends RawTypescriptPrinter {
-    typeChecker: ts.TypeChecker | undefined;
+export class GoPrinterBase extends TypolyBasePrinter {
     packageName: string = "main";
-    currentModuleName: string = "";
     currentPackagePath: string = "";
     importedPackages: Set<string> = new Set();
-    namespaceImports: Map<string, string> = new Map();
-    namedImports: Map<string, string> = new Map();
     usedHelpers: Set<string> = new Set();
     functionOverrides = loadFunctionOverrides();
 
     constructor(printerOptions: any = {}, handlers: any = {}, extra: any) {
         super(printerOptions, handlers, extra);
-        if (extra && extra.typeChecker) {
-            this.typeChecker = extra.typeChecker;
-        }
     }
 
+    // Go-specific package naming
     protected computePackageName(filePath: string): string {
         const baseDir = process.cwd() || ".";
         let relPath = filePath.replace(/\\/g, "/");
@@ -47,6 +41,7 @@ export class GoPrinterBase extends RawTypescriptPrinter {
         return "test_package/" + name;
     }
 
+    // Go-specific type mapping
     protected typeToString(typeNode: TypeNode): string {
         switch (typeNode.kind) {
             case ts.SyntaxKind.StringKeyword:
@@ -84,7 +79,7 @@ export class GoPrinterBase extends RawTypescriptPrinter {
 
     protected handleTypeReference(ref: ts.TypeReferenceNode): string {
         const typeName = this.getTextOfNode(ref.typeName);
-        
+
         const typeMap: Record<string, (args: ts.NodeArray<ts.TypeNode> | undefined) => string> = {
             "Array": (args) => {
                 const element = args ? this.typeToString(args[0]) : "interface{}";
@@ -116,10 +111,11 @@ export class GoPrinterBase extends RawTypescriptPrinter {
         if (typeMap[typeName]) {
             return typeMap[typeName](ref.typeArguments);
         }
-        
+
         return typeName;
     }
 
+    // Go-specific type inference
     protected mapInferredType(tsType: string): string {
         const typeMap: Record<string, string> = {
             "string": "string",
@@ -135,58 +131,39 @@ export class GoPrinterBase extends RawTypescriptPrinter {
             "Date": "time.Time",
             "Error": "error",
         };
-        
+
         if (typeMap[tsType]) {
             return typeMap[tsType];
         }
-        
+
         if (tsType.includes("|")) {
             return "interface{}";
         }
-        
+
         if (tsType.startsWith("Array<")) {
             const inner = tsType.slice(6, -1);
             return "[]" + this.mapInferredType(inner);
         }
-        
+
         if (tsType.endsWith("[]")) {
             const inner = tsType.slice(0, -2);
             return "[]" + this.mapInferredType(inner);
         }
-        
+
         if (tsType.startsWith("Map<")) {
             const inner = tsType.slice(4, -1);
             const [key, value] = this.splitGenericArgs(inner);
             return `map[${this.mapInferredType(key)}]${this.mapInferredType(value)}`;
         }
-        
+
         return tsType;
     }
 
-    protected splitGenericArgs(args: string): [string, string] {
-        let depth = 0;
-        let commaPos = -1;
-        for (let i = 0; i < args.length; i++) {
-            if (args[i] === '<') depth++;
-            else if (args[i] === '>') depth--;
-            else if (args[i] === ',' && depth === 0) {
-                commaPos = i;
-                break;
-            }
-        }
-        if (commaPos === -1) return [args.trim(), ""];
-        return [args.slice(0, commaPos).trim(), args.slice(commaPos + 1).trim()];
-    }
-
     protected escapeStringForGo(str: string): string {
-        return '"' + str
-            .replace(/\\/g, '\\\\')
-            .replace(/"/g, '\\"')
-            .replace(/\n/g, '\\n')
-            .replace(/\r/g, '\\r')
-            .replace(/\t/g, '\\t') + '"';
+        return this.escapeString(str);
     }
 
+    // Go-specific name conversion
     protected toCamelCase(str: string): string {
         return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
     }
@@ -196,23 +173,8 @@ export class GoPrinterBase extends RawTypescriptPrinter {
         return camel.charAt(0).toUpperCase() + camel.slice(1);
     }
 
-    protected isExported(node: Node): boolean {
-        const modifiers = this._getModifiers(node);
-        if (modifiers) {
-            for (const mod of modifiers) {
-                if (mod.kind === ts.SyntaxKind.ExportKeyword) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    protected _getModifiers(node: Node): ts.NodeArray<ts.ModifierLike> | undefined {
-        return 'modifiers' in node ? node.modifiers as ts.NodeArray<ts.ModifierLike> : undefined;
-    }
-
-    protected getContainingClassName(node: Node): string {
+    // Override to add PascalCase wrapping
+    override getContainingClassName(node: Node): string {
         let parent = node.parent;
         while (parent) {
             if (parent.kind === ts.SyntaxKind.ClassDeclaration && (parent as ts.ClassDeclaration).name) {
@@ -223,7 +185,7 @@ export class GoPrinterBase extends RawTypescriptPrinter {
         return "Unknown";
     }
 
-    protected getBaseClassName(node: Node): string | undefined {
+    override getBaseClassName(node: Node): string | undefined {
         let parent = node.parent;
         while (parent) {
             if (parent.kind === ts.SyntaxKind.ClassDeclaration) {
@@ -250,79 +212,24 @@ export class GoPrinterBase extends RawTypescriptPrinter {
         return super.getTextOfNode(node as any);
     }
 
-    protected getImportedModuleName(expr: ts.Expression): string | undefined {
-        if (!ts.isIdentifier(expr)) return undefined;
-        return this.namespaceImports.get(expr.text);
-    }
-
     protected resolveFunctionOverride(
         fullFunctionName: string,
         args: ts.NodeArray<ts.Expression>
     ): { cppFunction: string; returnType?: string } | null {
         if (!this.functionOverrides.functions[fullFunctionName]) return null;
-        
         const argValues: any[] = [];
         for (const arg of args) {
             argValues.push(this.extractArgumentValue(arg));
         }
-        
         const config = this.functionOverrides.functions[fullFunctionName];
         let optionValue: string | undefined;
         let dataType: string | undefined;
-        
         if (config.optionParameter !== undefined && config.optionName) {
             optionValue = this.extractOptionValueFromArgs(args, config.optionParameter, config.optionName);
         }
-        
         if (args.length > 0) {
             dataType = this.getArgumentDataType(args[0]);
         }
-        
         return resolveFunctionOverride(fullFunctionName, argValues, optionValue, dataType);
-    }
-    
-    private extractArgumentValue(arg: ts.Expression): any {
-        if (ts.isStringLiteral(arg)) return arg.text;
-        if (ts.isNumericLiteral(arg)) return parseFloat(arg.text);
-        if (arg.kind === ts.SyntaxKind.TrueKeyword) return true;
-        if (arg.kind === ts.SyntaxKind.FalseKeyword) return false;
-        if (arg.kind === ts.SyntaxKind.NullKeyword) return null;
-        if (ts.isObjectLiteralExpression(arg)) {
-            const obj: any = {};
-            for (const prop of arg.properties) {
-                if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name)) {
-                    obj[prop.name.text] = this.extractArgumentValue(prop.initializer);
-                }
-            }
-            return obj;
-        }
-        return undefined;
-    }
-    
-    private extractOptionValueFromArgs(
-        args: ts.NodeArray<ts.Expression>,
-        optionParamIndex: number,
-        optionName: string
-    ): string | undefined {
-        if (optionParamIndex >= args.length) return undefined;
-        const optionsArg = args[optionParamIndex];
-        if (!ts.isObjectLiteralExpression(optionsArg)) return undefined;
-        for (const prop of optionsArg.properties) {
-            if (ts.isPropertyAssignment(prop) && ts.isIdentifier(prop.name)) {
-                if (prop.name.text === optionName && ts.isStringLiteral(prop.initializer)) {
-                    return prop.initializer.text;
-                }
-            }
-        }
-        return undefined;
-    }
-    
-    private getArgumentDataType(arg: ts.Expression): string | undefined {
-        if (ts.isStringLiteral(arg)) return 'string';
-        if (ts.isNumericLiteral(arg)) return 'number';
-        if (arg.kind === ts.SyntaxKind.TrueKeyword || arg.kind === ts.SyntaxKind.FalseKeyword) return 'boolean';
-        if (ts.isArrayLiteralExpression(arg)) return 'array';
-        if (ts.isObjectLiteralExpression(arg)) return 'object';
-        return undefined;
     }
 }
