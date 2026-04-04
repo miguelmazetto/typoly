@@ -275,8 +275,7 @@ echo Build complete!
 
 // Generate go.mod for Go
 function generateGoMod(moduleName: string, pkg: PackageJson): string {
-    const sanitizedName = sanitizeIdentifier(pkg.name);
-    return `module ${sanitizedName}
+    return `module ${moduleName}
 
 go 1.21
 
@@ -304,9 +303,9 @@ func main() {
     fmt.Println("Typoly: Starting application...")
     
     // Initialize top-level declarations for main package
-    if !${basename(mainPackagePath)}.__tld_initialized {
-        ${basename(mainPackagePath)}.__tld()
-        ${basename(mainPackagePath)}.__tld_initialized = true
+    if !${basename(mainPackagePath)}.TldInitialized {
+        ${basename(mainPackagePath)}.Tld()
+        ${basename(mainPackagePath)}.TldInitialized = true
     }
     
     fmt.Println("Typoly: Application finished.")
@@ -338,6 +337,10 @@ if (!entryFile.endsWith('.ts') && !entryFile.endsWith('.tsx')) {
     entryFile += '.ts';
 }
 console.log(`Entry file: ${entryFile}`);
+
+// Determine Go module name from entry file path
+const entryFileForModule = entryFile.replace(/\\/g, '/');
+const goModuleName = entryFileForModule.startsWith('test_package/') ? 'test_package' : packageName;
 
 // Create output directory structure
 const outBaseDir = resolve(cwd, args.outDir);
@@ -461,6 +464,13 @@ console.log('Source files:', program.getSourceFiles()
                 
                 // For Go, restructure output so each file is in its own package directory
                 if (args.lang === 'go') {
+                    // Strip the Go module name prefix from the path (e.g., test_package/...)
+                    // since go.mod already declares the module as that prefix
+                    const goModulePrefix = goModuleName + '/';
+                    if (outPath.includes(goModulePrefix)) {
+                        outPath = outPath.replace(goModulePrefix, '');
+                    }
+                    
                     // Convert path/to/file.go to path/to/file/file.go
                     const lastSlash = outPath.lastIndexOf('/');
                     if (lastSlash > 0) {
@@ -591,13 +601,17 @@ int main(int argc, char* argv[]) {
     }
     
     // Generate go.mod
-    const goModContent = generateGoMod(packageName, pkg);
+    const goModContent = generateGoMod(goModuleName, pkg);
     const goModPath = join(outLangDir, 'go.mod');
     fs.writeFileSync(goModPath, goModContent);
     console.log('wrote', goModPath);
     
     // Generate main.go wrapper
-    const mainGoContent = generateGoMain(packageName + '/' + entryFile.replace(/\.tsx?$/, ''), generatedModules);
+    const mainPackagePath = entryFileForModule.replace(/\.tsx?$/, '');
+    const mainGoImportPath = mainPackagePath.startsWith(goModuleName + '/') 
+        ? mainPackagePath 
+        : goModuleName + '/' + mainPackagePath;
+    const mainGoContent = generateGoMain(mainGoImportPath, generatedModules);
     const mainGoPath = join(outLangDir, 'main.go');
     fs.writeFileSync(mainGoPath, mainGoContent);
     console.log('wrote', mainGoPath);
