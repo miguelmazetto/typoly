@@ -32,6 +32,19 @@ struct MatchResult {
     size_t length() const { return groups.length() + 1; }
 };
 
+// Wrapper for exec() results - provides .value property access
+struct ExecResult {
+    MatchResult value;
+    
+    ExecResult() {}
+    ExecResult(const MatchResult& m) : value(m) {}
+    
+    operator bool() const { return value.length() > 0; }
+    
+    MatchResult& getValue() { return value; }
+    const MatchResult& getValue() const { return value; }
+};
+
 // RegExp class
 class RegExp {
 public:
@@ -70,7 +83,7 @@ public:
     }
     
     // Execute and get first match
-    MatchResult exec(const String& str) const {
+    ExecResult exec(const String& str) const {
         std::smatch match;
         if (std::regex_search(str.value, match, pattern)) {
             MatchResult result;
@@ -79,11 +92,9 @@ public:
             for (size_t i = 1; i < match.size(); i++) {
                 result.groups.push(String(match[i].str()));
             }
-            return result;
+            return ExecResult(result);
         }
-        // Return empty MatchResult if no match
-        MatchResult empty;
-        return empty;
+        return ExecResult();
     }
     
     // Find all matches
@@ -148,7 +159,7 @@ inline bool match(const String& str, const RegExp& pattern) {
     return pattern.test(str);
 }
 
-inline std::optional<MatchResult> matchResult(const String& str, const RegExp& pattern) {
+inline ExecResult matchResult(const String& str, const RegExp& pattern) {
     return pattern.exec(str);
 }
 
