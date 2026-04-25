@@ -285,16 +285,7 @@ inline String realpathSync(const String^& path) {
 inline Stats lstatSync(const String^& path) {
     auto p = toPath(path);
     if (!std::filesystem::exists(p)) {
-        throw std::runtime_error(\
-ENOENT:
-no
-such
-file
-or
-directory
-lstat
-\" + path.value + \"
-\);
+        throw std::runtime_error("ENOENT: no such file or directory lstat " + path.value);
     }
     return statSync(path);
 }

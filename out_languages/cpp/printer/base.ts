@@ -1,4 +1,5 @@
 import * as ts from 'typescript';
+
 import type { SourceFile, Identifier, Node, TypeNode } from "typescript";
 import { TypolyBasePrinter } from '../../common/base_printer';
 import { loadFunctionOverrides, resolveFunctionOverride, hasFunctionOverrides } from '../config/resolver';

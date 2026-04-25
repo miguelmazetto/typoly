@@ -116,6 +116,7 @@ function generateBuildFiles(
     stdlibDir: string,
     stdlibOutDir: string
 ) {
+    console.trace("TRACE generateBuildFiles")
     if (args.lang === 'cpp') {
         if (!fs.existsSync(stdlibOutDir)) {
             fs.mkdirSync(stdlibOutDir, { recursive: true });
@@ -232,151 +233,97 @@ function runWatchMode(
         mainModuleName: ''
     };
 
-    const compilerOptions: ts.CompilerOptions = {
-        noLib: false,
-        noResolve: false,
-        declaration: false,
-        declarationOutputExtension: declExtension,
-        outputExtension: fileExtension,
-        rootDir: cwd,
-        outDir: outLangDir
-    };
+    const compilerOptions: ts.CompilerOptions = compilerOptionsPopulate({
+        incremental: true,
+        //tsBuildInfoFile: join(outLangDir, '.tsbuildinfo')
+    });
 
     const stdlibDir = join(__dirname, 'out_languages', args.lang, 'stdlib');
     const stdlibOutDir = join(outLangDir, 'stdlib');
 
+    let buildStartTime = 0;
+    let isFirstBuild = true;
+
     console.log('Starting watch mode...');
     console.log(`Watching: ${entryFile} and all dependencies`);
 
-    function emitSourceFiles(program: ts.Program) {
-        const tc = program.getTypeChecker();
-        const emitresolver = tc.getEmitResolver();
-        
-        watchState.generatedFiles = [];
-        watchState.generatedModules = [];
-        
-        for (const sourceFile of program.getSourceFiles()) {
-            if (sourceFile.isDeclarationFile) continue;
-            
-            const relPath = relative(cwd, sourceFile.fileName).replace(/\\/g, '/').replace(/\.tsx?$/, '');
-            const moduleName = relPath.split('/').filter(p => p && p !== '.').join('__');
-            
-            const sfFileName = sourceFile.fileName.replace(/\\/g, '/');
-            const entryFileNormalized = entryFile.replace(/\\/g, '/');
-            if (sfFileName === entryFileNormalized || sfFileName.endsWith('/' + entryFileNormalized)) {
-                watchState.mainModuleName = moduleName;
-            }
-            
-            const emitHost: ts.EmitHost = {
-                getCanonicalFileName: program.getCanonicalFileName,
-                getCommonSourceDirectory: program.getCommonSourceDirectory,
-                getCompilerOptions: program.getCompilerOptions,
-                getCurrentDirectory: () => program.getCurrentDirectory(),
-                getSourceFile: program.getSourceFile,
-                getSourceFileByPath: program.getSourceFileByPath,
-                getSourceFiles: program.getSourceFiles,
-                isSourceFileFromExternalLibrary: program.isSourceFileFromExternalLibrary,
-                getRedirectFromSourceFile: program.getRedirectFromSourceFile,
-                isSourceOfProjectReferenceRedirect: program.isSourceOfProjectReferenceRedirect,
-                getSymlinkCache: program.getSymlinkCache,
-                writeFile: (f, text) => {
-                    if (f.endsWith('.d.ts')) {
-                        f = f.substring(0, f.length - '.d.ts'.length) + declExtension;
-                    }
-                    if (f.endsWith('.ts') && !f.endsWith('.d.ts')) {
-                        f = f.substring(0, f.length - '.ts'.length) + fileExtension;
-                    }
-                    
-                    f = f.replace(/\\/g, '/');
-                    
-                    let outPath = f;
-                    
-                    if (args.lang === 'go') {
-                        const goModulePrefix = goModuleName + '/';
-                        if (outPath.includes(goModulePrefix)) {
-                            outPath = outPath.replace(goModulePrefix, '');
-                        }
-                        
-                        const lastSlash = outPath.lastIndexOf('/');
-                        if (lastSlash > 0) {
-                            const dir = outPath.substring(0, lastSlash);
-                            const base = outPath.substring(lastSlash + 1);
-                            const pkgName = base.replace(/\.(go|ts)$/, '');
-                            outPath = `${dir}/${pkgName}/${base}`;
-                        }
-                    }
-                    
-                    const lastSlash = outPath.lastIndexOf('/');
-                    const outDirPath = lastSlash > 0 ? outPath.substring(0, lastSlash) : '';
-                    if (outDirPath && !fs.existsSync(outDirPath)) {
-                        fs.mkdirSync(outDirPath, { recursive: true });
-                    }
-                    
-                    fs.writeFileSync(outPath, text);
-                    console.log('wrote', outPath);
-                    
-                    const relPath = relative(outLangDir, outPath).replace(/\\/g, '/');
-                    if (!watchState.generatedFiles.includes(relPath)) {
-                        watchState.generatedFiles.push(relPath);
-                        watchState.generatedModules.push(moduleName);
-                    }
-                },
-                isEmitBlocked: () => false,
-                shouldTransformImportCall: program.shouldTransformImportCall,
-                getEmitModuleFormatOfFile: program.getEmitModuleFormatOfFile,
-                getDefaultResolutionModeForFile: program.getDefaultResolutionModeForFile,
-                getModeForResolutionAtIndex: program.getModeForResolutionAtIndex,
-                readFile: program.readFile,
-                fileExists: program.fileExists,
-                realpath: program.realpath,
-                useCaseSensitiveFileNames: program.useCaseSensitiveFileNames,
-                getBuildInfo: program.getBuildInfo!,
-                getSourceFileFromReference: program.getSourceFileFromReference,
-                redirectTargetsMap: program.redirectTargetsMap,
-                getFileIncludeReasons: program.getFileIncludeReasons,
-                createHash: ts.sys.createHash,
-                getModuleResolutionCache: program.getModuleResolutionCache,
-                trace: program.trace,
-                getGlobalTypingsCacheLocation: program.getGlobalTypingsCacheLocation,
-            };
-            
-            emitFiles(
-                emitresolver,
-                emitHost,
-                sourceFile,
-                {
-                    declarationTransformers: [ts.transformDeclarations],
-                    scriptTransformers: []
-                },
-                false,
-                false,
-                false,
-                false,
-                makeCreatePrinter(PrinterClass),
-                tc
-            );
+    const formatHost: ts.FormatDiagnosticsHost = {
+        getCanonicalFileName: path => path,
+        getCurrentDirectory: () => cwd,
+        getNewLine: () => ts.sys.newLine
+    };
+
+    function reportDiagnostic(diagnostic: ts.Diagnostic) {
+        console.error("Error", diagnostic.code, ":", ts.flattenDiagnosticMessageText(diagnostic.messageText, formatHost.getNewLine()));
+    }
+
+    function reportWatchStatusChanged(diagnostic: ts.Diagnostic) {
+        const msg = ts.formatDiagnostic(diagnostic, formatHost);
+        if (msg.includes('Starting') || msg.includes('change') || msg.includes('completed')) {
+            console.log(`[watch] ${msg.trim()}`);
         }
     }
 
+    const createProgram = ts.createSemanticDiagnosticsBuilderProgram;
     const watchHost = ts.createWatchCompilerHost(
-        [entryFile],
+        entryFile,
         compilerOptions,
         ts.sys,
-        undefined,
-        undefined,
-        (diagnostic, newLine, options, errorCount) => {
-            const msg = ts.flattenDiagnosticMessageText(diagnostic.messageText, newLine);
-            if (errorCount !== undefined && errorCount > 0) {
-                console.error(`[${newLine === '\n' ? 'error' : 'info'}] ${msg}`);
-            } else {
-                console.log(`[${newLine === '\n' ? 'info' : 'info'}] ${msg}`);
-            }
-        }
+        createProgram,
+        reportDiagnostic,
+        reportWatchStatusChanged
     );
 
+    const origCreateProgram = watchHost.createProgram;
+    watchHost.createProgram = (rootNames, options, host, oldProgram, configFile, projRefs) => {
+        console.trace("TRACE CREATEPROGRAM")
+        const builderProgram = origCreateProgram(rootNames, options, host, oldProgram, configFile, projRefs)
+        const program = builderProgram.getProgram()
+        const {generatedFiles, generatedModules} = programEdit(program)
+        watchState.generatedFiles = generatedFiles;
+        watchState.generatedModules = generatedModules;
+        return builderProgram
+    }
+
+    //const origCreateProgram = watchHost.createProgram;
+
+    //watchHost.createProgram = (rootNames, options, host, oldProgram) => {
+    //    doCreateProgram(origCreateProgram, options)
+    //}
+
+    const origPostProgramCreate = watchHost.afterProgramCreate;
     watchHost.afterProgramCreate = (builderProgram) => {
-        const program = builderProgram.getProgram();
-        emitSourceFiles(program);
+        //const {generatedFiles, generatedModules, program} = programEdit(builderProgram.getProgram())
+        //watchState.generatedFiles = generatedFiles;
+        //watchState.generatedModules = generatedModules;
+
+        console.trace("TRACE AFTERCREATEPROGRAM")
+        
+        if (isFirstBuild) {
+            buildStartTime = performance.now();
+        } else {
+            origPostProgramCreate?.(builderProgram)
+            return;
+        }
+
+        const program = builderProgram.getProgram()
+        program.emit()
+        
+        generateBuildFiles(
+            args,
+            cwd,
+            outLangDir,
+            watchState.generatedFiles,
+            watchState.generatedModules,
+            watchState.mainModuleName,
+            packageName,
+            goModuleName,
+            pkg,
+            stdlibDir,
+            stdlibOutDir
+        );
+        
+        const elapsed = (performance.now() - buildStartTime).toFixed(2);
         
         console.log('\n=== Build Summary ===');
         console.log(`Language: ${args.lang}`);
@@ -385,6 +332,10 @@ function runWatchMode(
         console.log(`Main module: ${watchState.mainModuleName}`);
         console.log(`Generated files: ${watchState.generatedFiles.length}`);
         console.log(`Output: ${outLangDir}`);
+        console.log(`Build time: ${elapsed}ms`);
+        
+        isFirstBuild = false;
+        origPostProgramCreate?.(builderProgram)
     };
 
     const watchProgram = ts.createWatchProgram(watchHost);
@@ -635,6 +586,12 @@ if (!entryFile.endsWith('.ts') && !entryFile.endsWith('.tsx')) {
 }
 console.log(`Entry file: ${entryFile}`);
 
+let mainModuleName;
+{
+    var relPath = relative(cwd, entryFile).replace(/\\/g, '/').replace(/\.tsx?$/, '');
+    mainModuleName = relPath.split(/[\\/]+/).filter(p => p && p !== '.').join('__');
+}
+
 // Determine Go module name from entry file path
 const entryFileForModule = entryFile.replace(/\\/g, '/');
 const goModuleName = entryFileForModule.startsWith('test_package/') ? 'test_package' : packageName;
@@ -671,36 +628,24 @@ switch (args.lang) {
 const stdlibDir = join(__dirname, 'out_languages', args.lang, 'stdlib');
 const stdlibOutDir = join(outLangDir, 'stdlib');
 
-if (args.watch) {
-    runWatchMode(
-        args,
-        cwd,
-        entryFile,
-        outLangDir,
-        goModuleName,
-        PrinterClass,
-        fileExtension,
-        declExtension,
-        packageName,
-        pkg
-    );
-} else {
-    // Track generated files and modules
-    const generatedFiles: string[] = [];
-    const generatedModules: string[] = [];
-    let mainModuleName = '';
-
-    const program = benchmark_func(()=>ts.createProgram([entryFile], {
+function compilerOptionsPopulate(options: ts.CompilerOptions = {}): ts.CompilerOptions{
+    return {
+        ...options,
         noLib: false,
         noResolve: false,
         declaration: false,
         declarationOutputExtension: declExtension,
         outputExtension: fileExtension,
         rootDir: cwd,
-        outDir: outLangDir
-    }));
+        outDir: outLangDir,
+        listEmittedFiles: true
+    }
+}
 
+function programEdit(program: ts.Program){
     const tc = program.getTypeChecker()
+    const createPrinterFunc = makeCreatePrinter(PrinterClass)
+    const emitresolver = tc.getEmitResolver()
 
     function getEmitHost(writeFileCallback?: ts.WriteFileCallback): ts.EmitHost {
         return {
@@ -736,100 +681,132 @@ if (args.watch) {
         };
     }
 
+    let generatedFiles: Record<string, boolean> = {}
+    let generatedModules: Record<string, boolean> = {}
+
+    const emithost = getEmitHost((f, text, wo, onerr, files, d) => {
+        // Handle file extension conversion
+        if (f.endsWith('.d.ts')) {
+            f = f.substring(0, f.length - '.d.ts'.length) + declExtension;
+        }
+        if (f.endsWith('.ts') && !f.endsWith('.d.ts')) {
+            f = f.substring(0, f.length - '.ts'.length) + fileExtension;
+        }
+        
+        // Normalize path
+        f = f.replace(/\\/g, '/');
+        const cwdNormalized = cwd.replace(/\\/g, '/');
+        const outDirNormalized = outLangDir.replace(/\\/g, '/');
+        
+        // The path from TypeScript already includes outDir, so just use it directly
+        let outPath = f;
+        
+        // For Go, restructure output so each file is in its own package directory
+        if (args.lang === 'go') {
+            // Strip the Go module name prefix from the path (e.g., test_package/...)
+            // since go.mod already declares the module as that prefix
+            const goModulePrefix = goModuleName + '/';
+            if (outPath.includes(goModulePrefix)) {
+                outPath = outPath.replace(goModulePrefix, '');
+            }
+            
+            // Convert path/to/file.go to path/to/file/file.go
+            const lastSlash = outPath.lastIndexOf('/');
+            if (lastSlash > 0) {
+                const dir = outPath.substring(0, lastSlash);
+                const base = outPath.substring(lastSlash + 1);
+                const pkgName = base.replace(/\.(go|ts)$/, '');
+                outPath = `${dir}/${pkgName}/${base}`;
+            }
+        }
+        
+        const lastSlash = outPath.lastIndexOf('/');
+        const outDirPath = lastSlash > 0 ? outPath.substring(0, lastSlash) : '';
+        if (outDirPath && !fs.existsSync(outDirPath)) {
+            fs.mkdirSync(outDirPath, { recursive: true });
+        }
+        
+        fs.writeFileSync(outPath, text);
+        console.log('wrote', outPath);
+    })
+
+    program.emit = (sourceFile, writeFile, cancellationToken, emitOnly, transformers, forceDtsEmit, skipBuildInfo) => {
+        //if(sourceFile){
+        //    // Compute module name (same logic as printer's computeModuleName)
+        //    const relPath = relative(cwd, sourceFile.fileName).replace(/\\/g, '/').replace(/\.tsx?$/, '');
+        //    const moduleName = relPath.split('/').filter(p => p && p !== '.').join('__');
+        //    
+        //    // Track if this is the main entry file
+        //    const sfFileName = sourceFile.fileName.replace(/\\/g, '/');
+        //    const entryFileNormalized = entryFile.replace(/\\/g, '/');
+        //    if (sfFileName === entryFileNormalized || sfFileName.endsWith('/' + entryFileNormalized)) {
+        //        mainModuleName = moduleName;
+        //    }
+        //}
+
+        console.trace('emit trace')
+
+        let result = tc.runWithCancellationToken(
+            cancellationToken,
+            () => emitFiles(
+                emitresolver,
+                emithost,
+                sourceFile,
+                {
+                    declarationTransformers: [],
+                    scriptTransformers: []
+                },
+                emitOnly,
+                false,
+                forceDtsEmit,
+                skipBuildInfo,
+                createPrinterFunc,
+                tc
+        ));
+
+        console.log('er:', result)
+        return result
+    }
+
+    return {
+        program,
+        generatedFiles: Object.keys(generatedFiles),
+        generatedModules: Object.keys(generatedModules)
+    }
+}
+
+function doCreateProgram(createProgram: typeof ts.createProgram, options: ts.CompilerOptions = {}){
+    return programEdit(createProgram([entryFile], compilerOptionsPopulate(options)))
+}
+
+if (args.watch) {
+    runWatchMode(
+        args,
+        cwd,
+        entryFile,
+        outLangDir,
+        goModuleName,
+        PrinterClass,
+        fileExtension,
+        declExtension,
+        packageName,
+        pkg
+    );
+} else {
+    // Track generated files and modules
+    const { program, generatedFiles, generatedModules } = benchmark_func(()=>doCreateProgram(ts.createProgram));
+    let emitResult = program.emit()
+
     console.log('Source files:', program.getSourceFiles()
         .filter(f => !f.isDeclarationFile)
         .map(f => f.fileName.replace(cwd.replace(/\\/g, '/') + '/', '')));
-
-    {
-        let emitresolver = tc.getEmitResolver()
-
-        for (const sourceFile of program.getSourceFiles()) {
-            if (sourceFile.isDeclarationFile) continue;
-            
-            // Compute module name (same logic as printer's computeModuleName)
-            const relPath = relative(cwd, sourceFile.fileName).replace(/\\/g, '/').replace(/\.tsx?$/, '');
-            const moduleName = relPath.split('/').filter(p => p && p !== '.').join('__');
-            
-            // Track if this is the main entry file
-            const sfFileName = sourceFile.fileName.replace(/\\/g, '/');
-            const entryFileNormalized = entryFile.replace(/\\/g, '/');
-            if (sfFileName === entryFileNormalized || sfFileName.endsWith('/' + entryFileNormalized)) {
-                mainModuleName = moduleName;
-            }
-            
-            const emitResults = emitFiles(
-                emitresolver,
-                getEmitHost((f, text, wo, onerr, files, d) => {
-                    // Handle file extension conversion
-                    if (f.endsWith('.d.ts')) {
-                        f = f.substring(0, f.length - '.d.ts'.length) + declExtension;
-                    }
-                    if (f.endsWith('.ts') && !f.endsWith('.d.ts')) {
-                        f = f.substring(0, f.length - '.ts'.length) + fileExtension;
-                    }
-                    
-                    // Normalize path
-                    f = f.replace(/\\/g, '/');
-                    const cwdNormalized = cwd.replace(/\\/g, '/');
-                    const outDirNormalized = outLangDir.replace(/\\/g, '/');
-                    
-                    // The path from TypeScript already includes outDir, so just use it directly
-                    let outPath = f;
-                    
-                    // For Go, restructure output so each file is in its own package directory
-                    if (args.lang === 'go') {
-                        // Strip the Go module name prefix from the path (e.g., test_package/...)
-                        // since go.mod already declares the module as that prefix
-                        const goModulePrefix = goModuleName + '/';
-                        if (outPath.includes(goModulePrefix)) {
-                            outPath = outPath.replace(goModulePrefix, '');
-                        }
-                        
-                        // Convert path/to/file.go to path/to/file/file.go
-                        const lastSlash = outPath.lastIndexOf('/');
-                        if (lastSlash > 0) {
-                            const dir = outPath.substring(0, lastSlash);
-                            const base = outPath.substring(lastSlash + 1);
-                            const pkgName = base.replace(/\.(go|ts)$/, '');
-                            outPath = `${dir}/${pkgName}/${base}`;
-                        }
-                    }
-                    
-                    const lastSlash = outPath.lastIndexOf('/');
-                    const outDirPath = lastSlash > 0 ? outPath.substring(0, lastSlash) : '';
-                    if (outDirPath && !fs.existsSync(outDirPath)) {
-                        fs.mkdirSync(outDirPath, { recursive: true });
-                    }
-                    
-                    fs.writeFileSync(outPath, text);
-                    console.log('wrote', outPath);
-                    
-                    // Track relative file path for build files (relative to outLangDir)
-                    const relPath = relative(outLangDir, outPath).replace(/\\/g, '/');
-                    generatedFiles.push(relPath);
-                    generatedModules.push(moduleName);
-                }),
-                sourceFile,
-                {
-                    declarationTransformers: [ts.transformDeclarations],
-                    scriptTransformers: []
-                },
-                /*emitOnly*/ false,
-                /*onlyBuildInfo*/ false,
-                /*forceDtsEmit*/ false,
-                /*skipBuildInfo*/ false,
-                makeCreatePrinter(PrinterClass),
-                tc
-            )
-        }
-    }
 
     // Generate build system files
     generateBuildFiles(
         args,
         cwd,
         outLangDir,
-        generatedFiles,
+        emitResult.emittedFiles!,//generatedFiles,
         generatedModules,
         mainModuleName,
         packageName,
