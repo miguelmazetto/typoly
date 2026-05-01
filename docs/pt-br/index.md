@@ -182,26 +182,6 @@ for (auto& w : workers) w.join();
 
 ---
 
-## Índice
-
-0. [Por Que Este Projeto?](#por-que-este-projeto)
-1. [Background da Transpilação TypeScript](#1-background-da-transpilação-typescript)
-2. [A Inovação Central](#2-a-inovação-central)
-3. [O Problema da Factory Function e Solução](#3-o-problema-da-factory-function-e-solução)
-4. [Geração de Código: generate_ts_printer.ts](#4-geração-de-código-generate_ts_printerts)
-5. [Arquitetura da Camada Comum](#5-arquitetura-da-camada-comum)
-6. [Arquitetura do Printer C++](#6-arquitetura-do-printer-c)
-7. [Cadeia de Herança Mixin](#7-cadeia-de-herança-mixin)
-8. [Implementação da Stdlib C++](#8-implementação-da-stdlib-c)
-9. [Sistema de Módulos](#9-sistema-de-módulos)
-10. [Tratamento de Tipos União](#10-tratamento-de-tipos-união)
-11. [Narrowing de Tipo com typeof](#11-narrowing-de-tipo-com-typeof)
-12. [Sistema de Substituição de Funções](#12-sistema-de-substituição-de-funções)
-13. [CLI e Sistema de Build](#13-cli-e-sistema-de-build)
-14. [Estrutura do Projeto](#14-estrutura-do-projeto)
-
----
-
 ## 1. Background da Transpilação TypeScript
 
 ### 1.1 O Pipeline Padrão
