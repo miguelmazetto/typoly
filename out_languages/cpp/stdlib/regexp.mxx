@@ -97,21 +97,35 @@ public:
         return ExecResult();
     }
     
-    // Find all matches
+    // matchAll: returns a vector of all match results
     Vector<MatchResult> matchAll(const String& str) const {
         Vector<MatchResult> results;
-        auto it = std::sregex_iterator(str.value.begin(), str.value.end(), pattern);
-        auto end = std::sregex_iterator();
-        
-        for (; it != end; ++it) {
+        const std::string& s = str.value;
+        size_t pos = 0;
+
+        while (pos <= s.length()) {
+            std::smatch match;
+            if (!std::regex_search(s.begin() + pos, s.end(), match, pattern)) {
+                break;
+            }
+
+            size_t matchIndex = pos + match.position();
             MatchResult result;
-            result.value = String(it->str());
-            result.index = it->position();
-            for (size_t i = 1; i < it->size(); i++) {
-                result.groups.push(String((*it)[i].str()));
+            result.value = String(match.str());
+            result.index = matchIndex;
+            for (size_t i = 1; i < match.size(); ++i) {
+                result.groups.push(String(match[i].str()));
             }
             results.push(result);
+
+            // Advance position: avoid infinite loop on zero-length matches
+            if (match.length() == 0) {
+                pos = matchIndex + 1;
+            } else {
+                pos = matchIndex + match.length();
+            }
         }
+
         return results;
     }
     
@@ -138,16 +152,78 @@ public:
         return String(result);
     }
     
-    // Split string by pattern
+    // split: splits the string by the regex pattern, respecting limit and capturing groups
     Vector<String> split(const String& str, size_t limit = std::string::npos) const {
         Vector<String> result;
-        auto it = std::sregex_token_iterator(str.value.begin(), str.value.end(), pattern, -1);
-        auto end = std::sregex_token_iterator();
-        
-        size_t count = 0;
-        for (; it != end && count < limit; ++it, ++count) {
-            result.push(String(it->str()));
+        const std::string& s = str.value;
+        const size_t npos = std::string::npos;
+
+        // JS behavior: limit = 0 -> empty array
+        if (limit == 0) {
+            return result;
         }
+
+        // Edge case: empty string
+        if (s.empty()) {
+            std::smatch m;
+            if (std::regex_search(s.begin(), s.end(), m, pattern)) {
+                // regex matches empty string -> return [] (JS: "".split(//) -> [])
+                return result;
+            } else {
+                // no match -> return [""]
+                result.push(String(""));
+                return result;
+            }
+        }
+
+        size_t lastEnd = 0;
+        size_t pos = 0;
+
+        while (pos <= s.length() && (limit == npos || result.size() < limit)) {
+            std::smatch match;
+            if (!std::regex_search(s.begin() + pos, s.end(), match, pattern)) {
+                break;
+            }
+
+            size_t matchStart = pos + match.position();
+            size_t matchEnd = matchStart + match.length();
+
+            // add substring before the match
+            if (result.size() < limit) {
+                result.push(String(s.substr(lastEnd, matchStart - lastEnd)));
+            } else {
+                break;
+            }
+
+            // add capturing groups
+            for (size_t g = 1; g < match.size(); ++g) {
+                if (result.size() < limit) {
+                    result.push(String(match[g].str()));
+                } else {
+                    break;
+                }
+            }
+
+            lastEnd = matchEnd;
+
+            // advance position for next search, handling zero-length matches
+            if (match.length() == 0) {
+                pos = matchStart + 1;
+            } else {
+                pos = matchEnd;
+            }
+
+            // stop if limit is reached after adding groups
+            if (limit != npos && result.size() >= limit) {
+                break;
+            }
+        }
+
+        // add the remaining tail if limit not exceeded
+        if (limit == npos || result.size() < limit) {
+            result.push(String(s.substr(lastEnd)));
+        }
+
         return result;
     }
     
