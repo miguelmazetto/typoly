@@ -1,0 +1,4 @@
+{
+    "markdown.extension.print.theme": "dark",
+    "markdown.extension.print.includeVscodeStylesheets": true
+}

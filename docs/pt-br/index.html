@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>TyPoly - TCC TypeProgram</title>
+            <style>
+/* From extension vscode.github */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.vscode-dark img[src$=\#gh-light-mode-only],
+.vscode-light img[src$=\#gh-dark-mode-only],
+.vscode-high-contrast:not(.vscode-high-contrast-light) img[src$=\#gh-light-mode-only],
+.vscode-high-contrast-light img[src$=\#gh-dark-mode-only] {
+	display: none;
+}
+
+</style>
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex/dist/katex.min.css">
+<link href="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.css" rel="stylesheet" type="text/css">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item {
+    list-style-type: none;
+}
+
+.task-list-item-checkbox {
+    margin-left: -20px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+</style>
+<style>
+:root {
+  --color-note: #0969da;
+  --color-tip: #1a7f37;
+  --color-warning: #9a6700;
+  --color-severe: #bc4c00;
+  --color-caution: #d1242f;
+  --color-important: #8250df;
+}
+
+</style>
+<style>
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-note: #2f81f7;
+    --color-tip: #3fb950;
+    --color-warning: #d29922;
+    --color-severe: #db6d28;
+    --color-caution: #f85149;
+    --color-important: #a371f7;
+  }
+}
+
+</style>
+<style>
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: .25em solid #888;
+}
+
+.markdown-alert>:first-child {
+  margin-top: 0
+}
+
+.markdown-alert>:last-child {
+  margin-bottom: 0
+}
+
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: 500;
+  align-items: center;
+  line-height: 1
+}
+
+.markdown-alert .markdown-alert-title .octicon {
+  margin-right: 0.5rem;
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.markdown-alert.markdown-alert-note {
+  border-left-color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-important {
+  border-left-color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-warning {
+  border-left-color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-tip {
+  border-left-color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-caution {
+  border-left-color: var(--color-caution);
+}
+
+.markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--color-caution);
+}
+
+</style>
+        
+        </head>
+        <body class="vscode-body vscode-dark">
+            <style>
+  html, body {
+    background-color: #121314;
+    color: #BBBEBF;
+  }
+</style>
+<h1 id="typoly---tcc-typeprogram">TyPoly - TCC TypeProgram</h1>
+<h2 id="por-que-este-projeto">Por Que Este Projeto?</h2>
+<h3 id="o-problema-com-a-execução-de-javascripttypescript">O Problema com a Execução de JavaScript/TypeScript</h3>
+<p>TypeScript oferece excelente experiência de desenvolvimento com tipagem estática, autocompletar e captura de erros em tempo de compilação. Porém, em tempo de execução, JavaScript tem problemas significativos de consumo de recursos que afetam muitos casos de uso:</p>
+<h4 id="1-consumo-de-memória">1. Consumo de Memória</h4>
+<p>Objetos JavaScript são <strong>flexíveis quanto ao tipo por design</strong>. Cada valor deve ser capaz de conter qualquer tipo em tempo de execução porque os tipos são descartados após a compilação:</p>
+<pre><code class="language-javascript"><span class="hljs-comment">// TypeScript (tempo de compilação)</span>
+<span class="hljs-keyword">let</span> <span class="hljs-attr">x</span>: string | number = <span class="hljs-string">&quot;hello&quot;</span>;
+x = <span class="hljs-number">42</span>;  <span class="hljs-comment">// Funciona em tempo de execução</span>
+
+<span class="hljs-comment">// Em execução, x precisa guardar tanto string quanto number</span>
+<span class="hljs-comment">// Isso exige metadados para tipagem dinâmica (classes ocultas, etiquetas de tipo)</span>
+<span class="hljs-comment">// O V8 usa classes ocultas: cada objeto rastreia sua forma</span>
+<span class="hljs-comment">// Cada número pode consumir memória extra para possíveis mudanças de tipo</span>
+</code></pre>
+<p>As implementações de JavaScript (V8, JavaScriptCore) implementam otimizações sofisticadas, mas ainda precisam lidar com a flexibilidade de tipos. Um simples contador <code>for (let i = 0; i &lt; 1000000; i++)</code> cria um número que poderia, potencialmente, se tornar qualquer tipo.</p>
+<h4 id="2-tamanho-do-bináriopacote">2. Tamanho do Binário/Pacote</h4>
+<p>TypeScript remove todas as anotações de tipo durante a compilação, resultando em JavaScript <strong>menor</strong> que o código-fonte original. No entanto, o JavaScript final ainda:</p>
+<ul>
+<li>Precisa incluir auxiliares de execução (runtime helpers)</li>
+<li>Depende de polyfills para funcionalidades modernas</li>
+<li>Carrega uma máquina virtual inteira (V8, SpiderMonkey, etc.)</li>
+<li>Não possui eliminação de código morto no nível da VM</li>
+</ul>
+<p>Um projeto TypeScript de 10 MB (código-fonte) pode produzir algumas centenas de KB de JavaScript, mas esse JavaScript precisa executar dentro de um ambiente que ocupa dezenas de MB (como o Node.js ou um navegador). O Typoly resolve isso gerando C++20 que compila para um binário nativo de ~157 KB (no projeto de teste), sem necessidade de VM ou runtime adicional.</p>
+<h4 id="3-tempo-de-inicialização-a-frio">3. Tempo de Inicialização a Frio</h4>
+<p>Quando uma aplicação JavaScript inicia:</p>
+<ol>
+<li><strong>Faz o parsing</strong> do código-fonte para AST</li>
+<li><strong>Compila</strong> para bytecode (Ignition)</li>
+<li><strong>Otimiza</strong> os caminhos mais usados (TurboFan)</li>
+<li><strong>Executa</strong> o código</li>
+</ol>
+<p>Essa fase de &quot;aquecimento&quot; (Tier-Up) leva segundos para aplicações grandes. Não há compilação antecipada (AOT) – cada reinicialização repete esse processo.</p>
+<h4 id="4-hardware-embutido">4. Hardware Embutido</h4>
+<p>Para programação de microcontroladores ou dispositivos leves:</p>
+<ul>
+<li>Implementações JavaScript exigem quantidade significativa de RAM (V8: cerca de 50 MB mínimo)</li>
+<li>Coletas de lixo são inaceitáveis para sistemas de tempo real</li>
+<li>Execução não determinística</li>
+</ul>
+<h4 id="5-paralelização-limitada-e-possível-em-c">5. Paralelização Limitada (e Possível em C++)</h4>
+<p>JavaScript é single-threaded. Web Workers têm alto custo:</p>
+<ul>
+<li>A passagem de mensagem exige serialização</li>
+<li>SharedArrayBuffer possui requisitos de segurança</li>
+<li><strong>Paralelização verdadeira</strong> exigiria múltiplos processos (ou threads nativas, mas isso não é possível em JavaScript padrão)</li>
+</ul>
+<p>Typoly, ao gerar C++20, <strong>torna possível</strong> o uso de threads nativas para paralelização. No entanto, <strong>no momento, o transpiler não implementa nenhuma transformação automática</strong> de código assíncrono ou paralelo – cabe ao desenvolvedor escrever código C++ com threads ou o transpiler poderá vir a suportar isso no futuro.</p>
+<hr>
+<h3 id="como-o-typoly-aborda-estes-problemas">Como o Typoly Aborda Estes Problemas</h3>
+<table>
+<thead>
+<tr>
+<th>Problema</th>
+<th>JavaScript</th>
+<th>Typoly (C++)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Memória</strong></td>
+<td>Objetos dinâmicos exigem flexibilidade de tipo</td>
+<td>Valores estaticamente tipados usam tamanho exato</td>
+</tr>
+<tr>
+<td><strong>Tamanho do binário</strong></td>
+<td>Auxiliares de execução incluídos</td>
+<td>157 KB no <code>test_package</code> (configuração <code>MinSizeRel</code>)</td>
+</tr>
+<tr>
+<td><strong>Embutido</strong></td>
+<td>Implementação &gt; 50 MB</td>
+<td>Possível (não testado)</td>
+</tr>
+<tr>
+<td><strong>Paralelização</strong></td>
+<td>Web Workers (com overhead)</td>
+<td>Threads nativas permitidas (não implementado automaticamente)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="comparação-de-memória">Comparação de Memória</h4>
+<pre><code class="language-javascript"><span class="hljs-comment">// JavaScript</span>
+<span class="hljs-keyword">const</span> arr = [<span class="hljs-number">1</span>, <span class="hljs-number">2</span>, <span class="hljs-number">3</span>];
+<span class="hljs-comment">// Classe oculta + cache em linha + etiquetas de tipo necessários</span>
+<span class="hljs-comment">// Cada número: 8 bytes + metadados da implementação</span>
+</code></pre>
+<pre><code class="language-cpp"><span class="hljs-comment">// C++ via Typoly</span>
+Vector&lt;<span class="hljs-type">double</span>&gt; arr = {<span class="hljs-number">1</span>, <span class="hljs-number">2</span>, <span class="hljs-number">3</span>};
+<span class="hljs-comment">// Apenas os valores: 8 bytes * 3 = 24 bytes</span>
+<span class="hljs-comment">// Nenhum metadado de execução necessário</span>
+</code></pre>
+<h4 id="caso-de-uso-em-hardware-embutido-teórico">Caso de Uso em Hardware Embutido (Teórico)</h4>
+<p>Um Arduino Due (ARM de 84 MHz) pode executar C++, mas não pode executar V8. Typoly poderia, teoricamente, permitir:</p>
+<pre><code class="language-typescript"><span class="hljs-comment">// Este código TypeScript poderia se tornar C++ para embarcados...</span>
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">blink</span>(<span class="hljs-params">times: <span class="hljs-built_in">number</span></span>): <span class="hljs-built_in">void</span> {
+    <span class="hljs-keyword">for</span> (<span class="hljs-keyword">let</span> i = <span class="hljs-number">0</span>; i &lt; times; i++) {
+        <span class="hljs-title function_">digitalWrite</span>(<span class="hljs-variable constant_">LED_BUILTIN</span>, <span class="hljs-variable constant_">HIGH</span>);
+        <span class="hljs-title function_">delay</span>(<span class="hljs-number">1000</span>);
+        <span class="hljs-title function_">digitalWrite</span>(<span class="hljs-variable constant_">LED_BUILTIN</span>, <span class="hljs-variable constant_">LOW</span>);
+        <span class="hljs-title function_">delay</span>(<span class="hljs-number">1000</span>);
+    }
+}
+<span class="hljs-title function_">blink</span>(<span class="hljs-number">5</span>);
+</code></pre>
+<p>Tornar-se-ia:</p>
+<pre><code class="language-cpp"><span class="hljs-comment">// Este C++ poderia rodar em hardware embarcado</span>
+<span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">blink</span><span class="hljs-params">(<span class="hljs-type">int</span> times)</span> </span>{
+    <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> i = <span class="hljs-number">0</span>; i &lt; times; i++) {
+        <span class="hljs-built_in">digitalWrite</span>(LED_BUILTIN, HIGH);
+        <span class="hljs-built_in">delay</span>(<span class="hljs-number">1000</span>);
+        <span class="hljs-built_in">digitalWrite</span>(LED_BUILTIN, LOW);
+        <span class="hljs-built_in">delay</span>(<span class="hljs-number">1000</span>);
+    }
+}
+</code></pre>
+<p><strong>Nota</strong>: Esse caso de uso ainda não foi testado nem implementado especificamente. As bibliotecas Arduino/firmware (<code>digitalWrite</code>, <code>delay</code>) precisariam de implementações personalizadas na biblioteca padrão. No entanto, o código C++ gerado é C++20 padrão, portanto, adicionar esse suporte é teoricamente possível.</p>
+<p><strong>Tamanho do binário</strong>: O projeto de testes (<code>test_package</code>, veja <code>.typoly_built/cpp/test.cpp</code>) compila para cerca de 157 KB na configuração <code>MinSizeRel</code> com MSVC – uma redução significativa em relação aos requisitos de memória de uma implementação JavaScript.</p>
+<h4 id="backend-de-servidor">Backend de Servidor</h4>
+<p>Para servidores de alta vazão, threads nativas podem substituir Web Workers:</p>
+<pre><code class="language-cpp"><span class="hljs-comment">// Criar 4 threads trabalhadoras para processamento paralelo</span>
+std::vector&lt;std::thread&gt; workers;
+<span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> i = <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">4</span>; i++) {
+    workers.<span class="hljs-built_in">emplace_back</span>(processTask, taskQueue);
+}
+<span class="hljs-keyword">for</span> (<span class="hljs-keyword">auto</span>&amp; w : workers) w.<span class="hljs-built_in">join</span>();
+</code></pre>
+<p><strong>Nota</strong>: O código acima é C++ válido, mas o Typoly <strong>não gera automaticamente</strong> esse padrão a partir de código JavaScript/TypeScript. É apenas um exemplo do que é possível fazer com a saída C++.</p>
+<hr>
+<h3 id="o-que-o-typoly-não-garante">O Que o Typoly NÃO Garante</h3>
+<ul>
+<li><strong>Velocidade</strong>: O TurboFan do V8 realiza otimizações agressivas. C++ escrito manualmente pode ser mais lento sem otimização cuidadosa.</li>
+<li><strong>Correção</strong>: O transpiler ainda está em evolução. Bugs no código gerado são possíveis.</li>
+<li><strong>Suporte completo</strong>: Nem todas as funcionalidades do TypeScript estão implementadas.</li>
+</ul>
+<hr>
+<h3 id="o-que-o-typoly-habilita">O Que o Typoly HABILITA</h3>
+<ul>
+<li><strong>Binários menores</strong> para a mesma funcionalidade</li>
+<li><strong>Uso de memória previsível</strong> sem pausas de coleta de lixo</li>
+<li><strong>Implantação em sistemas embutidos</strong> para dispositivos com recursos limitados (teoricamente)</li>
+<li><strong>Paralelização nativa</strong> com threads C++ padrão (possível, mas não automaticamente)</li>
+<li><strong>Implantação AOT</strong> – sem fase de aquecimento</li>
+</ul>
+<hr>
+<h2 id="índice">Índice</h2>
+<ol start="0">
+<li><a href="#por-que-este-projeto">Por Que Este Projeto?</a></li>
+<li><a href="#1-background-da-transpila%C3%A7%C3%A3o-typescript">Background da Transpilação TypeScript</a></li>
+<li><a href="#2-a-inova%C3%A7%C3%A3o-central">A Inovação Central</a></li>
+<li><a href="#3-o-problema-da-factory-function-e-solu%C3%A7%C3%A3o">O Problema da Factory Function e Solução</a></li>
+<li><a href="#4-gera%C3%A7%C3%A3o-de-c%C3%B3digo-generate_ts_printerts">Geração de Código: generate_ts_printer.ts</a></li>
+<li><a href="#5-arquitetura-da-camada-comum">Arquitetura da Camada Comum</a></li>
+<li><a href="#6-arquitetura-do-printer-c">Arquitetura do Printer C++</a></li>
+<li><a href="#7-cadeia-de-heran%C3%A7a-mixin">Cadeia de Herança Mixin</a></li>
+<li><a href="#8-implementa%C3%A7%C3%A3o-da-stdlib-c">Implementação da Stdlib C++</a></li>
+<li><a href="#9-sistema-de-m%C3%B3dulos">Sistema de Módulos</a></li>
+<li><a href="#10-tratamento-de-tipos-uni%C3%A3o">Tratamento de Tipos União</a></li>
+<li><a href="#11-narrowing-de-tipo-com-typeof">Narrowing de Tipo com typeof</a></li>
+<li><a href="#12-sistema-de-substitui%C3%A7%C3%A3o-de-fun%C3%A7%C3%B5es">Sistema de Substituição de Funções</a></li>
+<li><a href="#13-cli-e-sistema-de-build">CLI e Sistema de Build</a></li>
+<li><a href="#14-estrutura-do-projeto">Estrutura do Projeto</a></li>
+</ol>
+<hr>
+<h2 id="índice-1">Índice</h2>
+<ol start="0">
+<li><a href="#por-que-este-projeto">Por Que Este Projeto?</a></li>
+<li><a href="#1-background-da-transpila%C3%A7%C3%A3o-typescript">Background da Transpilação TypeScript</a></li>
+<li><a href="#2-a-inova%C3%A7%C3%A3o-central">A Inovação Central</a></li>
+<li><a href="#3-o-problema-da-factory-function-e-solu%C3%A7%C3%A3o">O Problema da Factory Function e Solução</a></li>
+<li><a href="#4-gera%C3%A7%C3%A3o-de-c%C3%B3digo-generate_ts_printerts">Geração de Código: generate_ts_printer.ts</a></li>
+<li><a href="#5-arquitetura-da-camada-comum">Arquitetura da Camada Comum</a></li>
+<li><a href="#6-arquitetura-do-printer-c">Arquitetura do Printer C++</a></li>
+<li><a href="#7-cadeia-de-heran%C3%A7a-mixin">Cadeia de Herança Mixin</a></li>
+<li><a href="#8-implementa%C3%A7%C3%A3o-da-stdlib-c">Implementação da Stdlib C++</a></li>
+<li><a href="#9-sistema-de-m%C3%B3dulos">Sistema de Módulos</a></li>
+<li><a href="#10-tratamento-de-tipos-uni%C3%A3o">Tratamento de Tipos União</a></li>
+<li><a href="#11-narrowing-de-tipo-com-typeof">Narrowing de Tipo com typeof</a></li>
+<li><a href="#12-sistema-de-substitui%C3%A7%C3%A3o-de-fun%C3%A7%C3%B5es">Sistema de Substituição de Funções</a></li>
+<li><a href="#13-cli-e-sistema-de-build">CLI e Sistema de Build</a></li>
+<li><a href="#14-estrutura-do-projeto">Estrutura do Projeto</a></li>
+</ol>
+<hr>
+<h2 id="1-background-da-transpilação-typescript">1. Background da Transpilação TypeScript</h2>
+<h3 id="11-o-pipeline-padrão">1.1 O Pipeline Padrão</h3>
+<p>TypeScript transpila passando por estas etapas:</p>
+<pre><code>Source (.ts)
+    ↓
+Parser → AST (Abstract Syntax Tree)
+    ↓
+Transformers (AST → AST)
+    ↓
+Printer → Output (.js)
+</code></pre>
+<p>O compilador TypeScript (<code>tsc</code>) já possui sistemas altamente sofisticados para cada etapa:</p>
+<ul>
+<li><strong>Parser</strong>: <code>ts.createSourceFile()</code> – faz parse da source para AST</li>
+<li><strong>Transformers</strong>: funções que transformam nós AST</li>
+<li><strong>Printer</strong>: <code>createPrinter()</code> – emite texto a partir do AST</li>
+</ul>
+<h3 id="12-por-que-reaproveitar">1.2 Por Que Reaproveitar?</h3>
+<p>O printer do TypeScript lida com:</p>
+<ul>
+<li>Mais de 200 tipos de sintaxe (FunctionDeclaration, CallExpression, BinaryExpression, etc.)</li>
+<li>Recuo e formatação adequada</li>
+<li>Comentários e JSDoc</li>
+<li>Source maps</li>
+<li>Milhares de casos extremos</li>
+</ul>
+<p>Escrever isso do zero seria um trabalho enorme. O insight principal: <strong>a sintaxe do TypeScript e do C++ é similar o suficiente</strong> para que a maior parte da lógica de impressão possa ser compartilhada.</p>
+<hr>
+<h2 id="2-a-inovação-central">2. A Inovação Central</h2>
+<h3 id="21-a-abordagem">2.1 A Abordagem</h3>
+<p>Em vez de escrever um novo printer do zero, nós:</p>
+<ol>
+<li><strong>Geramos</strong> uma classe printer base a partir do código-fonte do TypeScript</li>
+<li><strong>Estendemos</strong> via herança de classes</li>
+<li><strong>Substituímos</strong> métodos específicos para emitir C++</li>
+</ol>
+<pre><code>ts.createProgram() → AST → Custom Printer → C++ Output
+</code></pre>
+<h3 id="22-métodos-originais-permanecem">2.2 Métodos Originais Permanecem</h3>
+<p>Os métodos herdados lidam com a maioria dos nós AST inalterados:</p>
+<pre><code class="language-typescript"><span class="hljs-comment">// Em RawTypescriptPrinter (gerado do código-fonte TS)</span>
+<span class="hljs-title function_">emitFunctionDeclaration</span>(<span class="hljs-attr">node</span>: <span class="hljs-title class_">FunctionDeclaration</span>): <span class="hljs-built_in">void</span> {
+    <span class="hljs-comment">// Emite: function foo() { }</span>
+    <span class="hljs-comment">// Também funciona para C++: void foo() { }</span>
+}
+</code></pre>
+<p>Apenas métodos que precisam de especificidades C++ são substituídos nos mixins.</p>
+<hr>
+<h2 id="3-o-problema-da-factory-function-e-solução">3. O Problema da Factory Function e Solução</h2>
+<h3 id="31-por-que-herança-regular-não-funcionou">3.1 Por Que Herança Regular Não Funcionou</h3>
+<p>O printer do TypeScript não usa classes – ele usa <strong>factory functions</strong>:</p>
+<pre><code class="language-typescript"><span class="hljs-comment">// Do emitter.ts do TypeScript</span>
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">createPrinter</span>(<span class="hljs-params">
+    printerOptions: PrinterOptions, 
+    handlers?: PrintHandlers
+</span>): <span class="hljs-title class_">Printer</span> {
+    <span class="hljs-keyword">return</span> {
+        <span class="hljs-title function_">printFile</span>(<span class="hljs-params">sourceFile</span>) { ... },
+        <span class="hljs-title function_">emit</span>(<span class="hljs-params">node</span>) { ... },
+        <span class="hljs-comment">// ... centenas mais métodos</span>
+    };
+}
+</code></pre>
+<p>Isso retorna um objeto simples, não uma instância de classe. Você não pode estender funções factory com herança de classes.</p>
+<h3 id="32-a-solução-transformar-factory-em-classe">3.2 A Solução: Transformar Factory em Classe</h3>
+<p>O script <code>out_languages/common/generate_ts_printer.ts</code>:</p>
+<ol>
+<li><strong>Baixa</strong> o <code>emitter.ts</code> do TypeScript do GitHub (v5.9.3)</li>
+<li><strong>Transforma</strong> funções factory em métodos de classe</li>
+<li><strong>Adiciona</strong> novos parâmetros a funções-chave</li>
+<li><strong>Salva</strong> o resultado em <code>out_languages/common/ts_printer.ts</code></li>
+</ol>
+<p>A transformação:</p>
+<pre><code class="language-typescript"><span class="hljs-comment">// ANTES: função factory</span>
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">createPrinter</span>(<span class="hljs-params">options</span>) {
+    <span class="hljs-keyword">return</span> { <span class="hljs-title function_">emitFunctionDeclaration</span>(<span class="hljs-params">node</span>) { ... } };
+}
+
+<span class="hljs-comment">// DEPOIS: método de classe</span>
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">RawTypescriptPrinter</span> {
+    <span class="hljs-title function_">emitFunctionDeclaration</span>(<span class="hljs-attr">node</span>: <span class="hljs-title class_">FunctionDeclaration</span>): <span class="hljs-built_in">void</span> {
+        <span class="hljs-comment">// mesma implementação</span>
+    }
+}
+</code></pre>
+<h3 id="33-parâmetros-chave-adicionados">3.3 Parâmetros-Chave Adicionados</h3>
+<p>O script faz patch em funções para aceitar parâmetros adicionais:</p>
+<pre><code class="language-typescript"><span class="hljs-comment">// emitFiles - agora aceita função printer customizada</span>
+<span class="hljs-keyword">export</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">emitFiles</span>(<span class="hljs-params">
+    resolver, host, targetSourceFile,
+    { scriptTransformers, declarationTransformers },
+    emitOnly, onlyBuildInfo, forceDtsEmit, skipBuildInfo,
+    createPrinterFunc = createPrinter,    <span class="hljs-comment">// NOVO: factory de printer customizada</span>
+    typeChecker?: ts.TypeChecker          <span class="hljs-comment">// NOVO: verificador de tipos</span>
+</span>): <span class="hljs-title class_">EmitResult</span>
+
+<span class="hljs-comment">// createPrinter - agora aceita contexto extra</span>
+<span class="hljs-keyword">export</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">createPrinter</span>(<span class="hljs-params">
+    extra: EmitterExtraContext,           <span class="hljs-comment">// NOVO: contexto com typeChecker, etc.</span>
+    printerOptions: PrinterOptions = {},
+    handlers: PrintHandlers = {}
+</span>): <span class="hljs-title class_">Printer</span>
+</code></pre>
+<p>Estes parâmetros permitem que o pipeline de emit:</p>
+<ul>
+<li>Use um printer customizado em vez do padrão do TypeScript</li>
+<li>Consulte tipos via <code>typeChecker.getTypeAtLocation(node)</code></li>
+</ul>
+<hr>
+<h2 id="4-geração-de-código-generate_ts_printerts">4. Geração de Código: generate_ts_printer.ts</h2>
+<h3 id="41-localização-e-propósito">4.1 Localização e Propósito</h3>
+<p><strong>Arquivo</strong>: <code>out_languages/common/generate_ts_printer.ts</code></p>
+<p>Este script:</p>
+<ol>
+<li>Baixa o <code>emitter.ts</code> do TypeScript do GitHub</li>
+<li>Aplica transformações</li>
+<li>Salva em <code>ts_printer.ts</code> (e backup <code>.orig</code>)</li>
+</ol>
+<p>Roda apenas quando se atualiza a versão do TypeScript.</p>
+<h3 id="42-transformações-aplicadas">4.2 Transformações Aplicadas</h3>
+<pre><code class="language-typescript"><span class="hljs-keyword">const</span> patches = {
+    <span class="hljs-comment">// Adiciona parâmetro EmitterExtraContext ao createPrinter</span>
+    <span class="hljs-attr">createPrinter</span>: [{
+        <span class="hljs-attr">args</span>: <span class="hljs-string">&#x27;extra: EmitterExtraContext, &#x27;</span> + originalArgs
+    }],
+    
+    <span class="hljs-comment">// Adiciona createPrinterFunc e typeChecker ao emitFiles</span>
+    <span class="hljs-attr">emitFiles</span>: [{
+        <span class="hljs-attr">args</span>: originalArgs + <span class="hljs-string">&#x27;, createPrinterFunc = createPrinter, typeChecker?: ts.TypeChecker&#x27;</span>
+    }],
+    
+    <span class="hljs-comment">// Modifica emitJsFileOrBundle para usar printer customizado</span>
+    <span class="hljs-attr">emitJsFileOrBundle</span>: [{
+        <span class="hljs-attr">body</span>: <span class="hljs-function"><span class="hljs-params">body</span> =&gt;</span> body.<span class="hljs-title function_">replace</span>(<span class="hljs-string">&#x27;createPrinter(&#x27;</span>, <span class="hljs-string">&#x27;createPrinterFunc({typeChecker, ...}, &#x27;</span>)
+    }],
+    
+    <span class="hljs-comment">// Extensão de saída customizada (permite .cpp ao invés de .js)</span>
+    <span class="hljs-attr">getOutputExtension</span>: [{
+        <span class="hljs-attr">body</span>: <span class="hljs-string">&#x27;\n    return typoly_getOutputExtension(fileName, options);&#x27;</span>
+    }]
+};
+</code></pre>
+<h3 id="43-o-emitterextracontext">4.3 O EmitterExtraContext</h3>
+<p><strong>Arquivo</strong>: <code>out_languages/common/emitter_extra.ts</code></p>
+<pre><code class="language-typescript"><span class="hljs-keyword">export</span> <span class="hljs-keyword">type</span> <span class="hljs-title class_">EmitterExtraContext</span> = {
+    typeChecker?: <span class="hljs-title class_">TypeChecker</span>        <span class="hljs-comment">// Consulta tipos nos nós AST</span>
+    compilerOptions?: <span class="hljs-title class_">CompilerOptions</span>  <span class="hljs-comment">// Configurações do compilador</span>
+    resolver?: <span class="hljs-title class_">EmitResolver</span>      <span class="hljs-comment">// Informações de resolução de módulos</span>
+    host?: <span class="hljs-title class_">EmitHost</span>             <span class="hljs-comment">// Sistema de arquivos, etc.</span>
+};
+</code></pre>
+<p>Esta é a ponte entre o pipeline de emit e nosso printer customizado.</p>
+<hr>
+<h2 id="5-arquitetura-da-camada-comum">5. Arquitetura da Camada Comum</h2>
+<h3 id="51-estrutura-de-diretórios">5.1 Estrutura de Diretórios</h3>
+<pre><code>out_languages/common/
+├── ts_printer.ts          # RawTypescriptPrinter (gerado do TS)
+├── ts_printer.ts.orig   # Cópia original do GitHub
+├── generate_ts_printer.ts # Script gerador
+├── emitter_extra.ts    # EmitterExtraContext &amp; helpers
+└── base_printer.ts   # TypolyBasePrinter
+</code></pre>
+<h3 id="52-typolybaseprinter">5.2 TypolyBasePrinter</h3>
+<p><strong>Arquivo</strong>: <code>out_languages/common/base_printer.ts</code></p>
+<p>Classe base para todos os printers de linguagem, fornece utilitários compartilhados:</p>
+<pre><code class="language-typescript"><span class="hljs-keyword">export</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">TypolyBasePrinter</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_ inherited__">RawTypescriptPrinter</span> {
+    <span class="hljs-attr">typeChecker</span>: ts.<span class="hljs-property">TypeChecker</span> | <span class="hljs-literal">undefined</span>;
+    <span class="hljs-attr">packageName</span>: <span class="hljs-built_in">string</span> = <span class="hljs-string">&quot;main&quot;</span>;
+    <span class="hljs-attr">currentModuleName</span>: <span class="hljs-built_in">string</span> = <span class="hljs-string">&quot;&quot;</span>;
+    <span class="hljs-attr">namespaceImports</span>: <span class="hljs-title class_">Map</span>&lt;<span class="hljs-built_in">string</span>, <span class="hljs-built_in">string</span>&gt; = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Map</span>();
+    <span class="hljs-attr">namedImports</span>: <span class="hljs-title class_">Map</span>&lt;<span class="hljs-built_in">string</span>, <span class="hljs-built_in">string</span>&gt; = <span class="hljs-keyword">new</span> <span class="hljs-title class_">Map</span>();
+
+    <span class="hljs-comment">// --- Helpers compartilhados ---</span>
+    
+    <span class="hljs-comment">// Parse argumentos genéricos: &quot;T, U&quot; → [&quot;T&quot;, &quot;U&quot;]</span>
+    <span class="hljs-keyword">protected</span> <span class="hljs-title function_">splitGenericArgs</span>(<span class="hljs-attr">args</span>: <span class="hljs-built_in">string</span>): [<span class="hljs-built_in">string</span>, <span class="hljs-built_in">string</span>];
+    
+    <span class="hljs-comment">// Verifica se nó tem modificador export</span>
+    <span class="hljs-keyword">protected</span> <span class="hljs-title function_">isExported</span>(<span class="hljs-attr">node</span>: <span class="hljs-title class_">Node</span>): <span class="hljs-built_in">boolean</span>;
+    
+    <span class="hljs-comment">// Obtém nome da classe que contém o nó</span>
+    <span class="hljs-keyword">protected</span> <span class="hljs-title function_">getContainingClassName</span>(<span class="hljs-attr">node</span>: <span class="hljs-title class_">Node</span>): <span class="hljs-built_in">string</span>;
+    
+    <span class="hljs-comment">// Obtém nome da classe base da cláusula extends</span>
+    <span class="hljs-keyword">protected</span> <span class="hljs-title function_">getBaseClassName</span>(<span class="hljs-attr">node</span>: <span class="hljs-title class_">Node</span>): <span class="hljs-built_in">string</span> | <span class="hljs-literal">undefined</span>;
+    
+    <span class="hljs-comment">// Escapa literais de string</span>
+    <span class="hljs-keyword">protected</span> escapeString(<span class="hljs-attr">str</span>: <span class="hljs-built_in">string</span>): <span class="hljs-built_in">string</span>;
+    
+    <span class="hljs-comment">// Extrai valor em tempo de compilação da expressão</span>
+    <span class="hljs-keyword">protected</span> <span class="hljs-title function_">extractArgumentValue</span>(<span class="hljs-attr">arg</span>: ts.<span class="hljs-property">Expression</span>): <span class="hljs-built_in">any</span>;
+    
+    <span class="hljs-comment">// Obtém tipo de dado do argumento (string, number, boolean, etc.)</span>
+    <span class="hljs-keyword">protected</span> <span class="hljs-title function_">getArgumentDataType</span>(<span class="hljs-attr">arg</span>: ts.<span class="hljs-property">Expression</span>): <span class="hljs-built_in">string</span> | <span class="hljs-literal">undefined</span>;
+}
+</code></pre>
+<hr>
+<h2 id="6-arquitetura-do-printer-c">6. Arquitetura do Printer C++</h2>
+<h3 id="61-estrutura-de-diretórios">6.1 Estrutura de Diretórios</h3>
+<pre><code>out_languages/cpp/
+├── config/
+│   ├── resolver.ts              # Resolução de substituição de funções
+│   ├── types.ts               # Tipos TypeScript para config
+│   └── function_overrides.json # Config de overload de funções
+├── printer/
+│   ├── index.ts             # CppPrinter (final)
+│   ├── base.ts              # CppPrinterBase
+│   └── mixins/
+│       ├── declarations.ts  # Classes, funções, enums, variáveis
+│       ├── expressions.ts  # Ops binários, chamadas, acesso a propriedade
+│       ├── statements.ts # If, for, while, return, try
+│       └── imports.ts    # Import/export, arquivo fonte
+└── stdlib/               # Módulos C++20
+    ├── builtin.mxx        # Tipos base
+    ├── union.mxx         # União&lt;T, U&gt;
+    ├── console.mxx       # Console
+    ├── math.mxx         # Math
+    ├── fs.mxx, os.mxx, path.mxx, etc.
+</code></pre>
+<h3 id="62-cppprinterbase">6.2 CppPrinterBase</h3>
+<p><strong>Arquivo</strong>: <code>out_languages/cpp/printer/base.ts</code></p>
+<p>Estende <code>TypolyBasePrinter</code> com utilitários específicos do C++:</p>
+<pre><code class="language-typescript"><span class="hljs-keyword">export</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">CppPrinterBase</span> <span class="hljs-keyword">extends</span> <span class="hljs-title class_ inherited__">TypolyBasePrinter</span> {
+    <span class="hljs-comment">// --- Conversão de nome de módulo ---</span>
+    
+    <span class="hljs-comment">// &quot;src/utils/helper.ts&quot; → &quot;src__utils__helper&quot;</span>
+    <span class="hljs-keyword">protected</span> <span class="hljs-title function_">computeModuleName</span>(<span class="hljs-attr">filePath</span>: <span class="hljs-built_in">string</span>): <span class="hljs-built_in">string</span>;
+    
+    <span class="hljs-comment">// &quot;./utils&quot; → &quot;src__utils&quot;</span>
+    <span class="hljs-keyword">protected</span> <span class="hljs-title function_">toCppModulePath</span>(<span class="hljs-attr">tsModuleName</span>: <span class="hljs-built_in">string</span>): <span class="hljs-built_in">string</span>;
+
+    <span class="hljs-comment">// --- Mapeamento de tipos ---</span>
+    
+    <span class="hljs-comment">// TypeNode → C++: &quot;string&quot; → &quot;String&quot;, &quot;number&quot; → &quot;double&quot;</span>
+    <span class="hljs-keyword">protected</span> <span class="hljs-title function_">typeToString</span>(<span class="hljs-attr">typeNode</span>: <span class="hljs-title class_">TypeNode</span>): <span class="hljs-built_in">string</span>;
+    
+    <span class="hljs-comment">// Tipo inferido → C++: &quot;string[]&quot; → &quot;Vector&lt;String&gt;&quot;</span>
+    <span class="hljs-keyword">protected</span> <span class="hljs-title function_">mapInferredType</span>(<span class="hljs-attr">tsType</span>: <span class="hljs-built_in">string</span>): <span class="hljs-built_in">string</span>;
+    
+    <span class="hljs-comment">// Trata referências de tipo (Array&lt;T&gt; → Vector&lt;T&gt;)</span>
+    <span class="hljs-keyword">protected</span> <span class="hljs-title function_">handleTypeReference</span>(<span class="hljs-attr">ref</span>: ts.<span class="hljs-property">TypeReferenceNode</span>): <span class="hljs-built_in">string</span>;
+
+    <span class="hljs-comment">// --- Utilitário ---</span>
+    
+    <span class="hljs-comment">// Escapa keywords C++: &quot;class&quot; → &quot;class_&quot;</span>
+    <span class="hljs-keyword">protected</span> escapeCppKeyword(<span class="hljs-attr">name</span>: <span class="hljs-built_in">string</span>): <span class="hljs-built_in">string</span>;
+    
+    <span class="hljs-comment">// Resolve substituição de função da config</span>
+    <span class="hljs-keyword">protected</span> <span class="hljs-title function_">resolveFunctionOverride</span>(
+        <span class="hljs-attr">fullFunctionName</span>: <span class="hljs-built_in">string</span>, 
+        <span class="hljs-attr">args</span>: ts.<span class="hljs-property">NodeArray</span>&lt;ts.<span class="hljs-property">Expression</span>&gt;
+    ): { <span class="hljs-attr">cppFunction</span>: <span class="hljs-built_in">string</span> } | <span class="hljs-literal">null</span>;
+}
+</code></pre>
+<h3 id="63-mapeamento-de-tipos">6.3 Mapeamento de Tipos</h3>
+<table>
+<thead>
+<tr>
+<th>TypeScript</th>
+<th>C++</th>
+<th>Nota</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>string</code></td>
+<td><code>String</code></td>
+<td>Wrapper customizado</td>
+</tr>
+<tr>
+<td><code>number</code></td>
+<td><code>double</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>boolean</code></td>
+<td><code>bool</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>void</code></td>
+<td><code>void</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>any</code></td>
+<td><code>Value</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>string[]</code></td>
+<td><code>Vector&lt;String&gt;</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>T | U</code></td>
+<td><code>Union&lt;T, U&gt;</code></td>
+<td>Tipo união</td>
+</tr>
+<tr>
+<td><code>Map&lt;K,V&gt;</code></td>
+<td><code>Map&lt;K,V&gt;</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>Set&lt;T&gt;</code></td>
+<td><code>Set&lt;T&gt;</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>RegExp</code></td>
+<td><code>RegExp</code></td>
+<td>Classe customizada</td>
+</tr>
+<tr>
+<td><code>Date</code></td>
+<td><code>Date</code></td>
+<td>Classe customizada</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="7-cadeia-de-herança-mixin">7. Cadeia de Herança Mixin</h2>
+<h3 id="71-por-que-mixins">7.1 Por Que Mixins?</h3>
+<p>Cada arquivo lida com uma categoria de nós AST. Isso mantém o código gerenciável e fornece fronteiras claras.</p>
+<pre><code>RawTypescriptPrinter (base do TS)
+    ↓ extends
+TypolyBasePrinter (helpers compartilhados)
+    ↓ extends
+CppPrinterBase (utilitários C++)
+    ↓ extends
+DeclarationsMixin (declarations.ts)
+    ↓ extends
+ExpressionsMixin (expressions.ts)
+    ↓ extends
+StatementsMixin (statements.ts)
+    ↓ extends
+ImportsMixin (imports.ts)
+    ↓ extends
+CppPrinter (index.ts - vazio, só herda)
+</code></pre>
+<h3 id="72-responsabilidades-dos-mixins">7.2 Responsabilidades dos Mixins</h3>
+<table>
+<thead>
+<tr>
+<th>Mixin</th>
+<th>Arquivo</th>
+<th>Lida com</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DeclarationsMixin</td>
+<td><code>declarations.ts</code></td>
+<td><code>class</code>, <code>function</code>, <code>enum</code>, <code>interface</code>, <code>type alias</code>, <code>var/let/const</code></td>
+</tr>
+<tr>
+<td>ExpressionsMixin</td>
+<td><code>expressions.ts</code></td>
+<td><code>a + b</code>, <code>foo()</code>, <code>obj.prop</code>, literais</td>
+</tr>
+<tr>
+<td>StatementsMixin</td>
+<td><code>statements.ts</code></td>
+<td><code>if</code>, <code>for</code>, <code>while</code>, <code>return</code>, <code>try/catch</code>, typeof checks</td>
+</tr>
+<tr>
+<td>ImportsMixin</td>
+<td><code>imports.ts</code></td>
+<td><code>import</code>, <code>export</code>, emissão de arquivo fonte</td>
+</tr>
+</tbody>
+</table>
+<h3 id="73-como-se-conectam">7.3 Como se Conectam</h3>
+<p>Quando se emite um arquivo fonte:</p>
+<ol>
+<li><code>ImportsMixin.emitSourceFile()</code> é chamado</li>
+<li>Itera statements, chama <code>this.emit(stmt)</code></li>
+<li>Para funções → <code>DeclarationsMixin.emitFunctionDeclaration()</code></li>
+<li>Para chamadas → <code>ExpressionsMixin.emitCallExpression()</code></li>
+<li>Para operadores → <code>ExpressionsMixin.emitBinaryExpression()</code></li>
+</ol>
+<p>Cada mixin substitui apenas o que precisa; o resto passa para o pai.</p>
+<hr>
+<h2 id="8-implementação-da-stdlib-c">8. Implementação da Stdlib C++</h2>
+<h3 id="81-arquivos-de-módulo">8.1 Arquivos de Módulo</h3>
+<p>A stdlib é implementada como módulos C++20 (arquivos <code>.mxx</code>). Eles envolvem APIs JavaScript em C++ idiomático.</p>
+<h3 id="82-módulos-chave">8.2 Módulos Chave</h3>
+<p><strong>builtin.mxx</strong> - Tipos base:</p>
+<pre><code class="language-cpp"><span class="hljs-keyword">export</span> <span class="hljs-keyword">module</span> typoly_std_builtin;
+
+<span class="hljs-keyword">export</span> <span class="hljs-keyword">namespace</span> typoly_std_builtin {
+    <span class="hljs-comment">// String class - envolve std::string com API JS-like</span>
+    <span class="hljs-keyword">class</span> <span class="hljs-title class_">String</span> {
+    <span class="hljs-keyword">public</span>:
+        <span class="hljs-function"><span class="hljs-type">size_t</span> <span class="hljs-title">length</span><span class="hljs-params">()</span> <span class="hljs-type">const</span></span>;
+        <span class="hljs-function">String <span class="hljs-title">slice</span><span class="hljs-params">(<span class="hljs-type">int</span> start, <span class="hljs-type">int</span> end)</span> <span class="hljs-type">const</span></span>;
+        <span class="hljs-comment">// ... mais métodos</span>
+    };
+    
+    <span class="hljs-comment">// Vector&lt;T&gt; - envolve std::vector</span>
+    <span class="hljs-keyword">template</span> &lt;<span class="hljs-keyword">typename</span> T&gt;
+    <span class="hljs-keyword">class</span> <span class="hljs-title class_">Vector</span> {
+    <span class="hljs-keyword">public</span>:
+        <span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">push_back</span><span class="hljs-params">(<span class="hljs-type">const</span> T&amp; value)</span></span>;
+        <span class="hljs-function">T&amp; <span class="hljs-title">at</span><span class="hljs-params">(<span class="hljs-type">size_t</span> index)</span></span>;
+        <span class="hljs-function"><span class="hljs-type">size_t</span> <span class="hljs-title">size</span><span class="hljs-params">()</span> <span class="hljs-type">const</span></span>;
+        <span class="hljs-comment">// ... mais métodos</span>
+    };
+    
+    <span class="hljs-comment">// Map&lt;K, V&gt; - envolve std::map</span>
+    <span class="hljs-comment">// Set&lt;T&gt; - envolve std::set</span>
+    <span class="hljs-comment">// etc.</span>
+}
+</code></pre>
+<p><strong>union.mxx</strong> - Tipos união:</p>
+<pre><code class="language-cpp"><span class="hljs-keyword">export</span> <span class="hljs-keyword">module</span> typoly_std_union;
+
+<span class="hljs-keyword">export</span> <span class="hljs-keyword">namespace</span> typoly_std_union {
+    <span class="hljs-keyword">template</span> &lt;<span class="hljs-keyword">typename</span>... Ts&gt;
+    <span class="hljs-keyword">class</span> <span class="hljs-title class_">Union</span> {
+    <span class="hljs-keyword">private</span>:
+        std::variant&lt;Ts...&gt; var_;  <span class="hljs-comment">// Usa std::variant internamente</span>
+    <span class="hljs-keyword">public</span>:
+        <span class="hljs-comment">// Constrói a partir do valor</span>
+        <span class="hljs-keyword">template</span> &lt;<span class="hljs-keyword">typename</span> T&gt;
+        <span class="hljs-built_in">Union</span>(T&amp;&amp; value);
+        
+        <span class="hljs-comment">// Verificação de tipo</span>
+        <span class="hljs-keyword">template</span> &lt;<span class="hljs-keyword">typename</span> T&gt;
+        <span class="hljs-function"><span class="hljs-type">bool</span> <span class="hljs-title">holds</span><span class="hljs-params">()</span> <span class="hljs-type">const</span></span>;
+        
+        <span class="hljs-comment">// Obtém valor</span>
+        <span class="hljs-keyword">template</span> &lt;<span class="hljs-keyword">typename</span> T&gt;
+        <span class="hljs-function">T&amp; <span class="hljs-title">as</span><span class="hljs-params">()</span></span>;
+    };
+}
+</code></pre>
+<h3 id="83-stdvariant-por-trás-das-cenas">8.3 std::variant Por Trás das Cenas</h3>
+<p>A classe <code>Union</code> envolve <code>std::variant</code>:</p>
+<pre><code class="language-cpp"><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&lt;variant&gt;</span></span>
+
+<span class="hljs-keyword">template</span> &lt;<span class="hljs-keyword">typename</span>... Ts&gt;
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">Union</span> {
+    std::variant&lt;Ts...&gt; var_;  <span class="hljs-comment">// O armazenamento real</span>
+    
+<span class="hljs-keyword">public</span>:
+    <span class="hljs-keyword">template</span> &lt;<span class="hljs-keyword">typename</span> T&gt;
+    <span class="hljs-function"><span class="hljs-type">bool</span> <span class="hljs-title">holds</span><span class="hljs-params">()</span> <span class="hljs-type">const</span> </span>{
+        <span class="hljs-keyword">return</span> std::<span class="hljs-built_in">holds_alternative</span>&lt;T&gt;(var_);  <span class="hljs-comment">// Verifica tipo</span>
+    }
+    
+    <span class="hljs-keyword">template</span> &lt;<span class="hljs-keyword">typename</span> T&gt;
+    <span class="hljs-function">T&amp; <span class="hljs-title">as</span><span class="hljs-params">()</span> </span>{
+        <span class="hljs-keyword">return</span> std::<span class="hljs-built_in">get</span>&lt;T&gt;(var_);  <span class="hljs-comment">// Obtém valor</span>
+    }
+};
+</code></pre>
+<p>É por isso que o narrowing com typeof funciona: <code>value.holds&lt;String&gt;()</code> chama <code>std::holds_alternative&lt;String&gt;()</code>.</p>
+<hr>
+<h2 id="9-sistema-de-módulos">9. Sistema de Módulos</h2>
+<h3 id="91-conversão-de-imports">9.1 Conversão de Imports</h3>
+<p>Imports do TypeScript são convertidos para módulos C++20:</p>
+<pre><code class="language-typescript"><span class="hljs-comment">// TypeScript</span>
+<span class="hljs-keyword">import</span> { testVariables } <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;./tests/test_variables&#x27;</span>;
+<span class="hljs-keyword">import</span> * <span class="hljs-keyword">as</span> fs <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;fs&#x27;</span>;
+<span class="hljs-keyword">import</span> utils <span class="hljs-keyword">from</span> <span class="hljs-string">&#x27;./utils&#x27;</span>;
+</code></pre>
+<p>Torna-se:</p>
+<pre><code class="language-cpp"><span class="hljs-comment">// C++</span>
+<span class="hljs-keyword">import</span> tests__test_variables;
+<span class="hljs-keyword">import</span> typoly_std_fs;  <span class="hljs-comment">// Módulos core do Node.js mapeiam para stdlib</span>
+<span class="hljs-keyword">import</span> src__utils;
+
+<span class="hljs-keyword">namespace</span> tests__test_variables {
+    <span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">testVariables</span><span class="hljs-params">()</span></span>;
+}
+</code></pre>
+<h3 id="92-conversão-de-nome-de-módulo">9.2 Conversão de Nome de Módulo</h3>
+<p><strong>Método</strong>: <code>toCppModulePath()</code> em <code>CppPrinterBase</code></p>
+<pre><code class="language-typescript"><span class="hljs-keyword">protected</span> <span class="hljs-title function_">toCppModulePath</span>(<span class="hljs-attr">tsModuleName</span>: <span class="hljs-built_in">string</span>): <span class="hljs-built_in">string</span> {
+    <span class="hljs-keyword">let</span> name = tsModuleName.<span class="hljs-title function_">replace</span>(<span class="hljs-regexp">/^[&quot;&#x27;]|[&quot;&#x27;]$/g</span>, <span class="hljs-string">&quot;&quot;</span>);  <span class="hljs-comment">// Remove aspas</span>
+    name = name.<span class="hljs-title function_">replace</span>(<span class="hljs-regexp">/^(\.\/)/</span>, <span class="hljs-string">&quot;&quot;</span>);                       <span class="hljs-comment">// Remove ./</span>
+    name = name.<span class="hljs-title function_">replace</span>(<span class="hljs-regexp">/^(\.\.\/)/</span>, <span class="hljs-string">&quot;../&quot;</span>);
+    name = name.<span class="hljs-title function_">replace</span>(<span class="hljs-regexp">/\//g</span>, <span class="hljs-string">&quot;__&quot;</span>);                     <span class="hljs-comment">// / → __</span>
+    name = name.<span class="hljs-title function_">replace</span>(<span class="hljs-regexp">/\./g</span>, <span class="hljs-string">&quot;&quot;</span>);                     <span class="hljs-comment">// Remove .</span>
+    name = name.<span class="hljs-title function_">replace</span>(<span class="hljs-regexp">/-/g</span>, <span class="hljs-string">&quot;_&quot;</span>);                    <span class="hljs-comment">// - → _</span>
+    name = name.<span class="hljs-title function_">replace</span>(<span class="hljs-regexp">/\.tsx?$/</span>, <span class="hljs-string">&quot;&quot;</span>);                 <span class="hljs-comment">// Remove .ts/.tsx</span>
+    <span class="hljs-keyword">return</span> name;
+}
+</code></pre>
+<h3 id="93-o-processo-de-emitsourcefile">9.3 O Processo de emitSourceFile</h3>
+<p><strong>Arquivo</strong>: <code>out_languages/cpp/printer/mixins/imports.ts</code></p>
+<p>O método <code>emitSourceFile()</code>:</p>
+<ol>
+<li><strong>Emite global module fragment</strong> (necessário para includes de header)</li>
+<li><strong>Emite module declaration</strong>: <code>export module test;</code></li>
+<li><strong>Emite imports</strong>: <code>import tests__test_variables;</code></li>
+<li><strong>Categoriza statements</strong>: declarations vs TLD (código de nível superior)</li>
+<li><strong>Emite forward declarations</strong> (para hoisting)</li>
+<li><strong>Emite função __tld()</strong> (executa código de nível superior)</li>
+<li><strong>Emite as declarações reais</strong></li>
+</ol>
+<h3 id="94-tratamento-de-tld-top-level-declarations">9.4 Tratamento de TLD (Top-Level Declarations)</h3>
+<p>JavaScript permite execução de código em nível superior. C++ não permite. O transpiler:</p>
+<pre><code class="language-cpp"><span class="hljs-comment">// JavaScript (em test.ts)</span>
+console.<span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;hello&quot;</span>);
+<span class="hljs-type">const</span> x = <span class="hljs-number">5</span>;
+<span class="hljs-built_in">testFunction</span>();
+
+<span class="hljs-comment">// C++ - envolvido na função __tld()</span>
+<span class="hljs-keyword">export</span> <span class="hljs-type">void</span> __tld() {
+    __TLD_INIT();
+    console::<span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;hello&quot;</span>);
+    <span class="hljs-type">const</span> <span class="hljs-type">double</span> x = <span class="hljs-number">5</span>;
+    <span class="hljs-built_in">testFunction</span>();
+}
+</code></pre>
+<p>A função <code>__tld()</code> é chamada a partir de <code>main()</code> em tempo de execução.</p>
+<h3 id="95-macros-tld-explicadas">9.5 Macros TLD Explicadas</h3>
+<p>O sistema TLD usa macros definidas em <code>out_languages/cpp/stdlib/typoly_macros.h</code>. Cada macro tem um propósito específico:</p>
+<p><strong><code>typoly_macros.h</code></strong> - As definições das macros:</p>
+<pre><code class="language-cpp"><span class="hljs-meta">#<span class="hljs-keyword">pragma</span> once</span>
+
+<span class="hljs-comment">// Define chamadas TLD de módulos importados</span>
+<span class="hljs-meta">#<span class="hljs-keyword">define</span> __IMPORT_TLD_BLOCK(...) \
+    void __imported_modules_tld() { __VA_ARGS__; }</span>
+
+<span class="hljs-comment">// Bloco de import vazio para módulos sem imports  </span>
+<span class="hljs-meta">#<span class="hljs-keyword">define</span> __IMPORT_TLD_BLOCK_EMPTY() \
+    inline void __imported_modules_tld() {}</span>
+
+<span class="hljs-comment">// Chama a função __tld() de um único módulo importado</span>
+<span class="hljs-meta">#<span class="hljs-keyword">define</span> __IMPORT_TLD(modulename) modulename::__tld()</span>
+
+<span class="hljs-comment">// Macros helper TLD - emita estes separadamente</span>
+<span class="hljs-meta">#<span class="hljs-keyword">define</span> __TLD_INITIALIZED bool __tld_initialized = false</span>
+<span class="hljs-meta">#<span class="hljs-keyword">define</span> __TLD_INIT() <span class="hljs-keyword">if</span> (__tld_initialized) return; __tld_initialized = true; __imported_modules_tld()</span>
+</code></pre>
+<p><strong>Explicações expandidas:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Macro</th>
+<th>Definição</th>
+<th>Propósito</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>__TLD_INITIALIZED</code></td>
+<td><code>bool __tld_initialized = false;</code></td>
+<td>Flag booleana para rastrear se TLD foi executado (previne re-execução)</td>
+</tr>
+<tr>
+<td><code>__TLD_INIT()</code></td>
+<td><code>if (__tld_initialized) return; __tld_initialized = true; __imported_modules_tld();</code></td>
+<td>Guarda que retorna cedo se já inicializado, depois define flag e chama funções TLD dos módulos importados</td>
+</tr>
+<tr>
+<td><code>__IMPORT_TLD(modulename)</code></td>
+<td><code>modulename::__tld();</code></td>
+<td>Chama a função <code>__tld()</code> de outro módulo para inicializar seu código de nível superior primeiro</td>
+</tr>
+<tr>
+<td><code>__IMPORT_TLD_BLOCK({ ... })</code></td>
+<td>Define <code>void __imported_modules_tld() { ... }</code></td>
+<td>Agrupa múltiplas chamadas <code>__IMPORT_TLD()</code> em uma única função</td>
+</tr>
+<tr>
+<td><code>__IMPORT_TLD_BLOCK_EMPTY()</code></td>
+<td>Define <code>void __imported_modules_tld() {}</code></td>
+<td>Para módulos sem dependências</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Exemplo completo:</strong></p>
+<pre><code class="language-cpp"><span class="hljs-comment">// Fonte</span>
+<span class="hljs-keyword">import</span> { testVariables } from <span class="hljs-string">&#x27;./tests/test_variables&#x27;</span>;
+console.<span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;hello&quot;</span>);
+</code></pre>
+<p>Gera:</p>
+<pre><code class="language-cpp"><span class="hljs-meta">#<span class="hljs-keyword">include</span> <span class="hljs-string">&quot;typoly_macros.h&quot;</span></span>
+
+<span class="hljs-keyword">namespace</span> test {
+    <span class="hljs-comment">// Forward declarations</span>
+    <span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">testVariables</span><span class="hljs-params">()</span></span>;
+    
+    <span class="hljs-comment">// Bloco de import TLD - chama dependências primeiro</span>
+    __IMPORT_TLD_BLOCK({
+        __IMPORT_TLD(tests__test_variables);
+    });
+    
+    <span class="hljs-comment">// Flag de inicialização TLD</span>
+    __TLD_INITIALIZED;
+    
+    <span class="hljs-comment">// Função TLD - ponto de entrada para código de nível superior</span>
+    <span class="hljs-keyword">export</span> <span class="hljs-type">void</span> __tld() {
+        __TLD_INIT();           <span class="hljs-comment">// Se já inicializado, retorna cedo</span>
+                                <span class="hljs-comment">// Caso contrário: define flag, chama TLDs importados</span>
+        
+        console::<span class="hljs-built_in">log</span>(<span class="hljs-string">&quot;hello&quot;</span>);  <span class="hljs-comment">// Código de nível superior real</span>
+    }
+    
+    <span class="hljs-function"><span class="hljs-type">void</span> <span class="hljs-title">testVariables</span><span class="hljs-params">()</span> </span>{ ... }
+}
+</code></pre>
+<p>Quando <code>main()</code> chama <code>test::__tld()</code>:</p>
+<ol>
+<li><code>__TLD_INIT()</code> é chamado</li>
+<li>Se não inicializado (<code>__tld_initialized == false</code>):
+<ul>
+<li>Define <code>__tld_initialized = true</code></li>
+<li>Chama <code>__imported_modules_tld()</code> → chama <code>tests__test_variables::__tld()</code> primeiro</li>
+<li>Executa o código de nível superior: <code>console::log(&quot;hello&quot;)</code></li>
+</ul>
+</li>
+<li>Se já inicializado, retorna cedo (idempotente)</li>
+</ol>
+<h3 id="96-blocos-de-import-tld">9.6 Blocos de Import TLD</h3>
+<p>Para módulos que importam uns aos outros, as dependências devem inicializar primeiro:</p>
+<pre><code class="language-cpp">__IMPORT_TLD_BLOCK({
+    __IMPORT_TLD(tests__test_variables);
+    __IMPORT_TLD(tests__test_functions);
+});
+</code></pre>
+<p>A função <code>__tld()</code> de cada módulo chama a <code>__tld()</code> das dependências primeiro.</p>
+<hr>
+<h2 id="10-tratamento-de-tipos-união">10. Tratamento de Tipos União</h2>
+<h3 id="101-o-desafio">10.1 O Desafio</h3>
+<p>Tipos união do TypeScript (<code>string | number</code>) não têm equivalente direto em C++. Variáveis JavaScript podem conter qualquer tipo; variáveis C++ são estaticamente tipadas.</p>
+<h3 id="102-a-solução-classe-uniont-u">10.2 A Solução: Classe Union&lt;T, U&gt;</h3>
+<p>A stdlib fornece <code>Union&lt;T, U, ...&gt;</code> usando <code>std::variant</code>:</p>
+<pre><code class="language-cpp"><span class="hljs-comment">// out_languages/cpp/stdlib/union.mxx</span>
+<span class="hljs-keyword">template</span> &lt;<span class="hljs-keyword">typename</span>... Ts&gt;
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">Union</span> {
+    std::variant&lt;Ts...&gt; var_;
+<span class="hljs-keyword">public</span>:
+    <span class="hljs-keyword">template</span> &lt;<span class="hljs-keyword">typename</span> T&gt;
+    <span class="hljs-function"><span class="hljs-type">bool</span> <span class="hljs-title">holds</span><span class="hljs-params">()</span> <span class="hljs-type">const</span> </span>{
+        <span class="hljs-keyword">return</span> std::<span class="hljs-built_in">holds_alternative</span>&lt;T&gt;(var_);
+    }
+    
+    <span class="hljs-keyword">template</span> &lt;<span class="hljs-keyword">typename</span> T&gt;
+    <span class="hljs-function">T&amp; <span class="hljs-title">as</span><span class="hljs-params">()</span> </span>{
+        <span class="hljs-keyword">return</span> std::<span class="hljs-built_in">get</span>&lt;T&gt;(var_);
+    }
+};
+</code></pre>
+<h3 id="103-inferência-de-tipo">10.3 Inferência de Tipo</h3>
+<p>Quando o verificador de tipos detecta um tipo união:</p>
+<pre><code class="language-typescript"><span class="hljs-keyword">let</span> <span class="hljs-attr">u</span>: <span class="hljs-built_in">string</span> | <span class="hljs-built_in">number</span> = <span class="hljs-string">&quot;hello&quot;</span>;
+</code></pre>
+<p>Gera:</p>
+<pre><code class="language-cpp">Union&lt;String, <span class="hljs-type">double</span>&gt; u = <span class="hljs-string">&quot;hello&quot;</span>;
+</code></pre>
+<h3 id="104-exemplo-de-transformação">10.4 Exemplo de Transformação</h3>
+<p>TypeScript:</p>
+<pre><code class="language-typescript"><span class="hljs-keyword">function</span> <span class="hljs-title function_">processValue</span>(<span class="hljs-params">value: <span class="hljs-built_in">string</span> | <span class="hljs-built_in">number</span></span>): <span class="hljs-built_in">string</span> {
+    <span class="hljs-keyword">if</span> (<span class="hljs-keyword">typeof</span> value === <span class="hljs-string">&quot;string&quot;</span>) {
+        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;String value&quot;</span>;
+    } <span class="hljs-keyword">else</span> {
+        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;Number value&quot;</span>;
+    }
+}
+</code></pre>
+<p>C++:</p>
+<pre><code class="language-cpp"><span class="hljs-function">String <span class="hljs-title">processValue</span><span class="hljs-params">(Union&lt;String, <span class="hljs-type">double</span>&gt; value)</span> </span>{
+    <span class="hljs-keyword">if</span> (value.<span class="hljs-built_in">holds</span>&lt;String&gt;()) {
+        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;String value&quot;</span>;
+    } <span class="hljs-keyword">else</span> {
+        <span class="hljs-keyword">return</span> <span class="hljs-string">&quot;Number value&quot;</span>;
+    }
+}
+</code></pre>
+<p>O parâmetro da função é automaticamente tipado como <code>Union&lt;String, double&gt;</code>. O <code>typeof</code> se torna <code>value.holds&lt;String&gt;()</code>.</p>
+<hr>
+<h2 id="11-narrowing-de-tipo-com-typeof">11. Narrowing de Tipo com typeof</h2>
+<h3 id="111-como-funciona">11.1 Como Funciona</h3>
+<p><strong>Arquivo</strong>: <code>out_languages/cpp/printer/mixins/statements.ts</code></p>
+<p>O código detecta padrões de <code>typeof x === &quot;string&quot;</code>:</p>
+<pre><code class="language-typescript"><span class="hljs-comment">// Mapeia resultados TypeScript typeof para C++</span>
+<span class="hljs-keyword">const</span> <span class="hljs-attr">TYPEOF_MAP</span>: <span class="hljs-title class_">Record</span>&lt;<span class="hljs-built_in">string</span>, <span class="hljs-built_in">string</span>&gt; = {
+    <span class="hljs-string">&quot;string&quot;</span>: <span class="hljs-string">&quot;String&quot;</span>,
+    <span class="hljs-string">&quot;number&quot;</span>: <span class="hljs-string">&quot;double&quot;</span>, 
+    <span class="hljs-string">&quot;boolean&quot;</span>: <span class="hljs-string">&quot;bool&quot;</span>,
+    <span class="hljs-string">&quot;object&quot;</span>: <span class="hljs-string">&quot;Value&quot;</span>,
+    <span class="hljs-string">&quot;function&quot;</span>: <span class="hljs-string">&quot;Function&quot;</span>,
+    <span class="hljs-string">&quot;undefined&quot;</span>: <span class="hljs-string">&quot;Value&quot;</span>,
+};
+</code></pre>
+<h3 id="112-lógica-de-detecção">11.2 Lógica de Detecção</h3>
+<pre><code class="language-typescript"><span class="hljs-keyword">private</span> <span class="hljs-title function_">isTypeofCheck</span>(<span class="hljs-attr">node</span>: ts.<span class="hljs-property">Expression</span>): { <span class="hljs-attr">variable</span>: <span class="hljs-built_in">string</span>, <span class="hljs-attr">type</span>: <span class="hljs-built_in">string</span>, <span class="hljs-attr">isPositive</span>: <span class="hljs-built_in">boolean</span> } | <span class="hljs-literal">null</span> {
+    <span class="hljs-comment">// Verifica: typeof x === &quot;string&quot; (lado esquerdo)</span>
+    <span class="hljs-keyword">if</span> (ts.<span class="hljs-title function_">isTypeOfExpression</span>(node.<span class="hljs-property">left</span>) &amp;&amp; ts.<span class="hljs-title function_">isStringLiteral</span>(node.<span class="hljs-property">right</span>)) {
+        <span class="hljs-keyword">const</span> typeArg = node.<span class="hljs-property">left</span>.<span class="hljs-property">expression</span>;
+        <span class="hljs-keyword">if</span> (ts.<span class="hljs-title function_">isIdentifier</span>(typeArg)) {
+            <span class="hljs-keyword">const</span> typeStr = node.<span class="hljs-property">right</span>.<span class="hljs-property">text</span>;
+            <span class="hljs-keyword">const</span> cppType = <span class="hljs-variable constant_">TYPEOF_MAP</span>[typeStr];
+            <span class="hljs-keyword">if</span> (cppType) {
+                <span class="hljs-keyword">return</span> { <span class="hljs-attr">variable</span>: typeArg.<span class="hljs-property">text</span>, <span class="hljs-attr">type</span>: cppType, <span class="hljs-attr">isPositive</span>: <span class="hljs-literal">true</span> };
+            }
+        }
+    }
+    <span class="hljs-comment">// Também verifica: &quot;string&quot; === typeof x (lado direito)</span>
+    <span class="hljs-comment">// ...mesma lógica</span>
+}
+</code></pre>
+<h3 id="113-geração-de-código">11.3 Geração de Código</h3>
+<p>Em <code>emitIfStatement()</code>:</p>
+<pre><code class="language-typescript"><span class="hljs-title function_">emitIfStatement</span>(<span class="hljs-attr">node</span>: <span class="hljs-title class_">IfStatement</span>): <span class="hljs-built_in">void</span> {
+    <span class="hljs-keyword">const</span> typeofCheck = <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">isTypeofCheck</span>(node.<span class="hljs-property">expression</span>);
+    
+    <span class="hljs-keyword">if</span> (typeofCheck &amp;&amp; <span class="hljs-variable language_">this</span>.<span class="hljs-property">typeChecker</span>) {
+        <span class="hljs-comment">// Consulta o tipo da variável</span>
+        <span class="hljs-keyword">const</span> <span class="hljs-keyword">type</span> = <span class="hljs-variable language_">this</span>.<span class="hljs-property">typeChecker</span>.<span class="hljs-title function_">getTypeOfSymbolAtLocation</span>(<span class="hljs-built_in">symbol</span>, node);
+        <span class="hljs-keyword">const</span> typeStr = <span class="hljs-variable language_">this</span>.<span class="hljs-property">typeChecker</span>.<span class="hljs-title function_">typeToString</span>(<span class="hljs-keyword">type</span>);
+        
+        <span class="hljs-keyword">if</span> (typeStr.<span class="hljs-title function_">includes</span>(<span class="hljs-string">&quot;|&quot;</span>) || typeStr.<span class="hljs-title function_">startsWith</span>(<span class="hljs-string">&quot;Union&quot;</span>)) {
+            <span class="hljs-comment">// Gera: value.holds&lt;Type&gt;()</span>
+            <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">write</span>(typeofCheck.<span class="hljs-property">variable</span>);
+            <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">write</span>(<span class="hljs-string">&quot;.holds&lt;&quot;</span>);
+            <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">write</span>(typeofCheck.<span class="hljs-property">type</span>);
+            <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">write</span>(<span class="hljs-string">&quot;&gt;()&quot;</span>);
+        } <span class="hljs-keyword">else</span> {
+            <span class="hljs-comment">// Tipo já conhecido → simplifica para true</span>
+            <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">write</span>(<span class="hljs-string">&quot;true&quot;</span>);
+        }
+    } <span class="hljs-keyword">else</span> {
+        <span class="hljs-comment">// If statement normal</span>
+        <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">emitExpression</span>(node.<span class="hljs-property">expression</span>);
+    }
+}
+</code></pre>
+<h3 id="114-saída-simplificada">11.4 Saída Simplificada</h3>
+<p>Para declarações de variáveis simples, <code>typeof x === &quot;string&quot;</code> torna-se <code>if (true)</code>:</p>
+<pre><code class="language-typescript"><span class="hljs-keyword">let</span> <span class="hljs-attr">value</span>: <span class="hljs-built_in">string</span> = <span class="hljs-string">&quot;hello&quot;</span>;
+<span class="hljs-keyword">if</span> (<span class="hljs-keyword">typeof</span> value === <span class="hljs-string">&quot;string&quot;</span>) { ... }
+</code></pre>
+<p>Gera:</p>
+<pre><code class="language-cpp">String value = <span class="hljs-string">&quot;hello&quot;</span>;
+<span class="hljs-keyword">if</span> (<span class="hljs-literal">true</span>) { ... }
+</code></pre>
+<p>Isso funciona porque o tipo da variável já é conhecido como <code>String</code> pela declaração.</p>
+<hr>
+<h2 id="12-sistema-de-substituição-de-funções">12. Sistema de Substituição de Funções</h2>
+<h3 id="121-por-que-substituições">12.1 Por Que Substituições?</h3>
+<p>Algumas funções JavaScript têm overloads diferentes baseados em argumentos:</p>
+<pre><code class="language-javascript"><span class="hljs-comment">// fs.readFileSync(path)</span>
+<span class="hljs-comment">// fs.readFileSync(path, { encoding: &#x27;utf8&#x27; })</span>
+<span class="hljs-comment">// fs.readFileSync(path, { encoding: &#x27;binary&#x27; })</span>
+</code></pre>
+<p>Estas precisam de implementações C++ diferentes.</p>
+<h3 id="122-arquivo-de-configuração">12.2 Arquivo de Configuração</h3>
+<p><strong>Arquivo</strong>: <code>out_languages/cpp/config/function_overrides.json</code></p>
+<pre><code class="language-json"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;functions&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;fs.readFileSync&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+      <span class="hljs-attr">&quot;optionParameter&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;optionName&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;encoding&quot;</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;overloads&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+        <span class="hljs-attr">&quot;utf8&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+          <span class="hljs-attr">&quot;cppFunction&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;readFileSync&quot;</span><span class="hljs-punctuation">,</span>
+          <span class="hljs-attr">&quot;returnType&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;String&quot;</span>
+        <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+        <span class="hljs-attr">&quot;base64&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+          <span class="hljs-attr">&quot;cppFunction&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;readFileSyncBase64&quot;</span><span class="hljs-punctuation">,</span> 
+          <span class="hljs-attr">&quot;returnType&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;String&quot;</span>
+        <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+        <span class="hljs-attr">&quot;binary&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+          <span class="hljs-attr">&quot;cppFunction&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;readFileSyncBuffer&quot;</span><span class="hljs-punctuation">,</span>
+          <span class="hljs-attr">&quot;returnType&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Vector&lt;double&gt;&quot;</span>
+        <span class="hljs-punctuation">}</span>
+      <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">&quot;default&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+        <span class="hljs-attr">&quot;cppFunction&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;readFileSync&quot;</span><span class="hljs-punctuation">,</span>
+        <span class="hljs-attr">&quot;returnType&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;String&quot;</span>
+      <span class="hljs-punctuation">}</span>
+    <span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span>
+</code></pre>
+<h3 id="123-lógica-de-resolução">12.3 Lógica de Resolução</h3>
+<p><strong>Arquivo</strong>: <code>out_languages/cpp/config/resolver.ts</code></p>
+<pre><code class="language-typescript"><span class="hljs-keyword">export</span> <span class="hljs-keyword">function</span> <span class="hljs-title function_">resolveFunctionOverride</span>(<span class="hljs-params">
+    functionName: <span class="hljs-built_in">string</span>,
+    args: <span class="hljs-built_in">any</span>[],
+    optionValue?: <span class="hljs-built_in">string</span>,
+    dataType?: <span class="hljs-built_in">string</span>
+</span>): <span class="hljs-title class_">ResolvedOverride</span> {
+    <span class="hljs-keyword">const</span> config = <span class="hljs-title function_">getFunctionOverrideConfig</span>(functionName);
+    
+    <span class="hljs-comment">// Verifica cada condição de overload</span>
+    <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> [name, overload] <span class="hljs-keyword">of</span> <span class="hljs-title class_">Object</span>.<span class="hljs-title function_">entries</span>(config.<span class="hljs-property">overloads</span>)) {
+        <span class="hljs-keyword">switch</span> (overload.<span class="hljs-property">condition</span>.<span class="hljs-property">type</span>) {
+            <span class="hljs-keyword">case</span> <span class="hljs-string">&#x27;parameterCount&#x27;</span>:
+                <span class="hljs-keyword">if</span> (args.<span class="hljs-property">length</span> === overload.<span class="hljs-property">condition</span>.<span class="hljs-property">value</span>) {
+                    <span class="hljs-keyword">return</span> { <span class="hljs-attr">cppFunction</span>: overload.<span class="hljs-property">cppFunction</span>, ... };
+                }
+                <span class="hljs-keyword">break</span>;
+            <span class="hljs-keyword">case</span> <span class="hljs-string">&#x27;optionValue&#x27;</span>:
+                <span class="hljs-keyword">if</span> (optionValue === condition.<span class="hljs-property">value</span>) {
+                    <span class="hljs-keyword">return</span> { <span class="hljs-attr">cppFunction</span>: overload.<span class="hljs-property">cppFunction</span>, ... };
+                }
+                <span class="hljs-keyword">break</span>;
+        }
+    }
+    
+    <span class="hljs-keyword">return</span> { <span class="hljs-attr">cppFunction</span>: config.<span class="hljs-property">default</span>.<span class="hljs-property">cppFunction</span>, ... };
+}
+</code></pre>
+<h3 id="124-uso-no-printer">12.4 Uso no Printer</h3>
+<p>Em <code>emitCallExpression()</code>:</p>
+<pre><code class="language-typescript"><span class="hljs-title function_">emitCallExpression</span>(<span class="hljs-attr">node</span>: <span class="hljs-title class_">CallExpression</span>): <span class="hljs-built_in">void</span> {
+    <span class="hljs-keyword">const</span> propExpr = node.<span class="hljs-property">expression</span>;
+    <span class="hljs-keyword">const</span> fullFunctionName = <span class="hljs-string">`<span class="hljs-subst">${importedModule}</span>.<span class="hljs-subst">${methodName}</span>`</span>;
+    <span class="hljs-keyword">const</span> <span class="hljs-keyword">override</span> = <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">resolveFunctionOverride</span>(fullFunctionName, node.<span class="hljs-property">arguments</span>);
+    
+    <span class="hljs-keyword">if</span> (<span class="hljs-keyword">override</span>) {
+        <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">write</span>(importedModule);
+        <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">write</span>(<span class="hljs-string">&quot;::&quot;</span>);
+        <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">write</span>(<span class="hljs-keyword">override</span>.<span class="hljs-property">cppFunction</span>);
+        <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">emitArguments</span>(node.<span class="hljs-property">arguments</span>);
+    }
+}
+</code></pre>
+<hr>
+<h2 id="13-cli-e-sistema-de-build">13. CLI e Sistema de Build</h2>
+<h3 id="131-ponto-de-entrada">13.1 Ponto de Entrada</h3>
+<p><strong>Arquivo</strong>: <code>index.ts</code></p>
+<p>O CLI:</p>
+<ol>
+<li>Interpreta argumentos: <code>--lang cpp|go</code>, <code>--out &lt;dir&gt;</code>, <code>--file &lt;file&gt;</code>, <code>--watch</code></li>
+<li>Cria programa TypeScript: <code>ts.createProgram()</code></li>
+<li>Substitui emit para usar printer customizado</li>
+<li>Gera arquivos de build (CMakeLists.txt, go.mod)</li>
+</ol>
+<h3 id="132-processo-de-emit-customizado">13.2 Processo de Emit Customizado</h3>
+<p>A chave é substituir <code>program.emit()</code>:</p>
+<pre><code class="language-typescript">program.<span class="hljs-property">emit</span> = <span class="hljs-function">(<span class="hljs-params">sourceFile, ...</span>) =&gt;</span> {
+    <span class="hljs-comment">// Em vez do printer JS padrão, usa nosso printer C++</span>
+    <span class="hljs-keyword">let</span> result = tc.<span class="hljs-title function_">runWithCancellationToken</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-title function_">emitFiles</span>(
+        emitresolver,
+        emithost,
+        sourceFile,
+        { <span class="hljs-attr">declarationTransformers</span>: [], <span class="hljs-attr">scriptTransformers</span>: [] },
+        emitOnly,
+        <span class="hljs-literal">false</span>,
+        forceDtsEmit,
+        skipBuildInfo,
+        createPrinterFunc,    <span class="hljs-comment">// Nossa factory de printer</span>
+        tc                  <span class="hljs-comment">// Verificador de tipos</span>
+    ));
+    <span class="hljs-keyword">return</span> result;
+};
+</code></pre>
+<h3 id="133-arquivos-de-build-gerados">13.3 Arquivos de Build Gerados</h3>
+<p>Para C++, gera:</p>
+<ul>
+<li><strong>CMakeLists.txt</strong> - Configuração de build CMake</li>
+<li><strong>main.cpp</strong> - Ponto de entrada chamando <code>__tld()</code></li>
+<li><strong>typoly_macros.h</strong> - Macros de TLD e import</li>
+<li><strong>stdlib/</strong> - Módulos C++ copiados</li>
+</ul>
+<h3 id="134-estrutura-do-cmakeliststxt">13.4 Estrutura do CMakeLists.txt</h3>
+<pre><code class="language-cmake"><span class="hljs-keyword">cmake_minimum_required</span>(VERSION <span class="hljs-number">3.28</span>)
+<span class="hljs-keyword">project</span>(test_package LANGUAGES CXX)
+
+<span class="hljs-keyword">set</span>(CMAKE_CXX_STANDARD <span class="hljs-number">20</span>)
+<span class="hljs-keyword">set</span>(CMAKE_CXX_STANDARD_REQUIRED <span class="hljs-keyword">ON</span>)
+
+<span class="hljs-keyword">add_subdirectory</span>(stdlib typoly_stdlib)
+
+<span class="hljs-keyword">set</span>(MODULE_SOURCES
+    <span class="hljs-string">&quot;test.cpp&quot;</span>
+    <span class="hljs-string">&quot;tests/test_variables.cpp&quot;</span>
+    ...
+)
+
+<span class="hljs-keyword">add_executable</span>(<span class="hljs-variable">${PROJECT_NAME}</span> <span class="hljs-variable">${MODULE_SOURCES}</span> main.cpp)
+<span class="hljs-keyword">target_sources</span>(<span class="hljs-variable">${PROJECT_NAME}</span> PRIVATE FILE_SET CXX_MODULES FILES <span class="hljs-variable">${MODULE_SOURCES}</span>)
+<span class="hljs-keyword">target_link_libraries</span>(<span class="hljs-variable">${PROJECT_NAME}</span> PRIVATE typoly_stdlib)
+</code></pre>
+<hr>
+<h2 id="14-estrutura-do-projeto">14. Estrutura do Projeto</h2>
+<h3 id="141-diretório-root">14.1 Diretório Root</h3>
+<pre><code>typoly/
+├── index.ts                   # Ponto de entrada CLI
+├── package.json             # Dependências
+├── tsconfig.json           # Config TypeScript
+├── DEVELOPERS.md          # Este arquivo
+├── Union.md              # Notas de design de União
+└── test_package/         # Suíte de testes
+    ├── test.ts         # Teste principal
+    ├── tests/        # Testes individuais
+    ├── subfolder/    # Testes de subdiretório
+    └── .typoly_built/  # Saída gerada
+        └── cpp/
+            ├── test.cpp
+            ├── tests/
+            ├── stdlib/
+            ├── CMakeLists.txt
+            └── main.cpp
+</code></pre>
+<h3 id="142-referência-de-arquivos-chave">14.2 Referência de Arquivos Chave</h3>
+<table>
+<thead>
+<tr>
+<th>Caminho</th>
+<th>Propósito</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>index.ts</code></td>
+<td>CLI, criação de programa, emit customizado</td>
+</tr>
+<tr>
+<td><code>out_languages/common/ts_printer.ts</code></td>
+<td>RawTypescriptPrinter gerado</td>
+</tr>
+<tr>
+<td><code>out_languages/common/base_printer.ts</code></td>
+<td>TypolyBasePrinter</td>
+</tr>
+<tr>
+<td><code>out_languages/common/emitter_extra.ts</code></td>
+<td>EmitterExtraContext</td>
+</tr>
+<tr>
+<td><code>out_languages/cpp/printer/base.ts</code></td>
+<td>CppPrinterBase</td>
+</tr>
+<tr>
+<td><code>out_languages/cpp/printer/mixins/*.ts</code></td>
+<td>Cadeia de mixins</td>
+</tr>
+<tr>
+<td><code>out_languages/cpp/config/resolver.ts</code></td>
+<td>Resolução de substituição de funções</td>
+</tr>
+<tr>
+<td><code>out_languages/cpp/config/function_overrides.json</code></td>
+<td>Config de substituições</td>
+</tr>
+<tr>
+<td><code>out_languages/cpp/stdlib/*.mxx</code></td>
+<td>Módulos stdlib C++</td>
+</tr>
+</tbody>
+</table>
+<h3 id="143-arquivos-de-teste">14.3 Arquivos de Teste</h3>
+<table>
+<thead>
+<tr>
+<th>Arquivo de Teste</th>
+<th>Testa</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tests/test_variables.ts</code></td>
+<td>Variáveis, constantes</td>
+</tr>
+<tr>
+<td><code>tests/test_functions.ts</code></td>
+<td>Funções, arrow functions</td>
+</tr>
+<tr>
+<td><code>tests/test_classes.ts</code></td>
+<td>Classes, herança</td>
+</tr>
+<tr>
+<td><code>tests/test_arrays.ts</code></td>
+<td>Arrays, métodos</td>
+</tr>
+<tr>
+<td><code>tests/test_strings.ts</code></td>
+<td>Métodos de string</td>
+</tr>
+<tr>
+<td><code>tests/test_operators.ts</code></td>
+<td>Operadores binários</td>
+</tr>
+<tr>
+<td><code>tests/test_control_flow.ts</code></td>
+<td>if, for, while, switch</td>
+</tr>
+<tr>
+<td><code>tests/test_union_*.ts</code></td>
+<td>Tratamento de tipos união</td>
+</tr>
+<tr>
+<td><code>tests/test_imports_exports.ts</code></td>
+<td>Módulos de import</td>
+</tr>
+<tr>
+<td><code>tests/test_math.ts</code>, <code>test_date.ts</code>, <code>test_regexp.ts</code>, etc.</td>
+<td>APIs de stdlib</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="resumo">Resumo</h2>
+<p>Typoly funciona:</p>
+<ol>
+<li><strong>Gerando</strong> uma classe printer base a partir do código-fonte do TypeScript (transformação factory → classe)</li>
+<li><strong>Estendendo</strong> via herança de classes com mixins</li>
+<li><strong>Mapeando</strong> tipos: TS <code>string</code> → C++ <code>String</code>, <code>number</code> → <code>double</code>, <code>T|U</code> → <code>Union&lt;T,U&gt;</code></li>
+<li><strong>Tratando</strong> narrowing com typeof: <code>typeof x === &quot;string&quot;</code> → <code>x.holds&lt;String&gt;()</code></li>
+<li><strong>Envolvendo</strong> código de nível superior na função <code>__tld()</code></li>
+<li><strong>Gerando</strong> arquivos de build (CMakeLists.txt)</li>
+</ol>
+<p>O resultado é código C++20 idiomático que preserva a estrutura e a semântica do TypeScript original.</p>
+
+            <script async src="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.js"></script>
+            
+        </body>
+        </html>
